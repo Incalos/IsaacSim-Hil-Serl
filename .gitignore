@@ -205,3 +205,20 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Project specific
+.vscode/
+
+datasets/*
+!datasets/.gitkeep
+
+dependencies/*
+!dependencies/.gitkeep
+
+robot_envs/isaacsim_envs/so101_pick_oranges/assets/scenes/*
+!robot_envs/isaacsim_envs/so101_pick_oranges/assets/scenes/.gitkeep
+robot_envs/isaacsim_envs/so101_pick_oranges/assets/robots/*
+!robot_envs/isaacsim_envs/so101_pick_oranges/assets/robots/.gitkeep
+ros2_workspace/build/
+ros2_workspace/install/
+ros2_workspace/log/

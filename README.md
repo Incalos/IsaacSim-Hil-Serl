@@ -6,7 +6,7 @@ Part 1 详细说明如何在 IsaacSim 仿真环境中配置并测试 SO101 机�
 
 ### 📋 前提条件
 
-- 建议安装 uv、foxglove。
+- 建议安装 Foxglove Studio, uv。
 
 - 运行环境为 Ubantu 22.04, CUDA 12.8, Python 3.11。
 
@@ -56,7 +56,7 @@ uv pip install -e . --no-build-isolation
 
 为了运行 SO101 的任务 SO101-PickOranges，需要[下载](https://github.com/LightwheelAI/leisaac/releases/tag/v0.1.0)并配置 USD 场景文件。
 
-解压文件，将资产放置在 `robot_envs/isaacsim_envs/so101_pick_oranges/assets` 文件夹中. 
+解压文件，将资产放置在 `robot_infra/isaacsim_venvs/so101_pick_oranges/assets` 文件夹中. 
 
 `assets` 文件夹的结构如下:
 
@@ -75,23 +75,21 @@ uv pip install -e . --no-build-isolation
             └── Plate
 ```
 
-#### 🤖 步骤 3：SO101 机械臂 Isaac Sim 仿真环境
+#### 🤖 步骤 3：熟悉 SO101 机械臂 Isaac Sim 仿真环境
 
 本环境将 Isaac Sim 视作“数字孪生”层面的 Real World 代理，旨在为 SO101 机械臂提供高保真度的物理模拟与实时控制接口。
 
-针对 SO101 机械臂，我们提供了 cartesian pose control 以及 joint position control 两种控制模式。机械臂在仿真过程中的物理状态（包括关节力矩、末端位姿、相机流等）均通过 ROS2 实时发布，确保算法获取的数据与真实世界物理规律高度一致。
+针对 SO101 机械臂，我们提供了 cartesian pose control 以及 joint position control 两种控制模式。为提升 Real World RL 的鲁棒性，我们为该环境增加了 Domain randomization 策略，按下键盘的 `R` 键即可重置该环境。
 
-为了提升 Real World RL 的鲁棒性，我们为该环境增加了 Domain randomization 策略，按下键盘的 `R` 键即可重置该环境。
-
-我们推荐使用 Foxglove Studio 进行可视化调试，实时监控 ROS2 话题并下发控制指令。
+机械臂在仿真过程中的物理状态（包括关节力矩、末端位姿、相机流等）均通过 ROS2 实时发布，确保算法获取的数据与真实世界物理规律高度一致。我们推荐使用 Foxglove Studio 进行可视化调试，实时监控 ROS2 话题并下发控制指令。
 
 ```Bash
-cd IsaacSim-Hil-Serl/so101_examples
+cd IsaacSim-Hil-Serl/examples/SO101/pick_oranges
 
-bash ./start_isaacsim_env.sh
+bash ./start_isaacsim_venv.sh
 
 # Open in a new terminal
-bash ./foxglove_check_ros2.sh
+bash ./foxglove_inspect_data.sh
 ```
 
 ![Foxglove可视化调试](./assets/foxglove.png "Foxglove可视化调试")
@@ -103,25 +101,25 @@ bash ./foxglove_check_ros2.sh
 在开始正式训练前，需要根据具体任务确定 SO101 机械臂的工作空间。
 
 ```Bash
-cd IsaacSim-Hil-Serl/so101_examples
-bash ./find_safety_limits.sh
+cd IsaacSim-Hil-Serl/examples/SO101/pick_oranges
+bash ./check_robot_workspace.sh
 ```
 
 操作说明：
 
 - IsaacSim 控制方式：按下键盘上的 `b` 键开启环境；按下 `r` 键将重置环境。
 
-- 机械臂控制方式：使用键盘控制移动机械臂到期待的极限位置，参考[文档](https://lightwheelai.github.io/leisaac/resources/available_devices)。
+- 机械臂控制方式：此处仅提供 SO101-Leader、Keyboard、Gamepad 三种控制方式，具体参考[文档](https://lightwheelai.github.io/leisaac/resources/available_devices)。
 
-- 配置文件：脚本终端会实时将工作空间参数传入 ROS2 参数服务器配置文件中。
+- 配置文件：脚本会实时将工作空间参数传入 ROS2 参数服务器的配置文件中。
 
 ##### 4.2 遥操收集离线示例
 
-在 Issac Sim 中使用键盘遥操作控制机械臂，并收集离线示例。
+在 Issac Sim 中通过遥操作控制机械臂，并收集离线示例。
 
 ```Bash
-cd IsaacSim-Hil-Serl/so101_examples
-bash ./record_demos.sh
+cd IsaacSim-Hil-Serl/examples/SO101/pick_oranges
+bash ./record_task_demos.sh
 ```
 
 操作说明：
@@ -137,24 +135,28 @@ bash ./record_demos.sh
     - 按下 `n` 键将重置环境并将当前尝试标记为 `成功 (Successful)`;
 
 
+##### 4.3 训练 Reward Classifier
 
 
 
+##### 4.4 收集离线示例
 
 
 
+##### 4.5 训练 Policy
 
-
-
-
-
-
-
-
-
-
-
+此处将 Isaac Sim 视作“数字孪生”层面的 Real World 代理，故在开始训练 Policy 之前，需要启动该虚拟环境并配置 Flask Server。
 
 ```Bash
-uv run example_SO101/convert_lerobot_to_hilserl.py --input_dir=example_SO101/pick-orange --output_dir=example_SO101/classifier_data
+# 编译 ros2
+cd IsaacSim-Hil-Serl/robot_infra/ros2_ws
+colcon build
+
+# 启动 IsaacSim
+cd IsaacSim-Hil-Serl/examples/SO101/pick_oranges
+bash ./start_isaacsim_venv.sh
+
+# 另开一个终端
+bash ./start_robot_server.sh
 ```
+

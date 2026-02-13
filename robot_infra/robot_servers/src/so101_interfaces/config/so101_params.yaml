@@ -1,0 +1,53 @@
+robot_name: SO101
+flask_url: 127.0.0.1
+flask_port: 5000
+joint_names:
+- shoulder_pan
+- shoulder_lift
+- elbow_flex
+- wrist_flex
+- wrist_roll
+- gripper
+reset_joint_positions:
+- 0.0
+- 0.0
+- 0.2
+- 1.0
+- -1.5708
+- 1.0
+joint_limits:
+  shoulder_pan:
+  - -1.9198599
+  - 1.9198599
+  shoulder_lift:
+  - -1.7453299
+  - 1.7453299
+  elbow_flex:
+  - -1.7453299
+  - 1.5707999
+  wrist_flex:
+  - -1.6580599
+  - 1.6580599
+  wrist_roll:
+  - -2.79253
+  - 2.79253
+  gripper:
+  - -0.174533
+  - 1.7453299
+bounding_box:
+  min_translation:
+  - -0.14794397354125977
+  - -0.3445990979671478
+  - 0.10387915372848511
+  max_translation:
+  - 0.15188145637512207
+  - -0.14424964785575867
+  - 0.21055972576141357
+  min_rotation:
+  - 6.731054027002733
+  - -5.11725714154231
+  - -179.99919626718977
+  max_rotation:
+  - 47.81206882960447
+  - 4.677470979819102
+  - 179.99525731461176

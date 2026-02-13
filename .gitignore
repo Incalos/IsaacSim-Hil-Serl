@@ -175,12 +175,18 @@ datasets/*
 dependencies/*
 !dependencies/.gitkeep
 
-robot_infra/isaacsim_venvs/so101_pick_oranges/assets/scenes/*
-!robot_infra/isaacsim_venvs/so101_pick_oranges/assets/scenes/.gitkeep
+robot_infra/isaacsim_venvs/assets/scenes/*
+!robot_infra/isaacsim_venvs/assets/scenes/.gitkeep
 
-robot_infra/isaacsim_venvs/so101_pick_oranges/assets/robots/*
-!robot_infra/isaacsim_venvs/so101_pick_oranges/assets/robots/.gitkeep
+robot_infra/isaacsim_venvs/assets/robots/*
+!robot_infra/isaacsim_venvs/assets/robots/.gitkeep
+!robot_infra/isaacsim_venvs/assets/robots/*.urdf
 
-robot_infra/ros2_ws/build/
-robot_infra/ros2_ws/install/
-robot_infra/ros2_ws/log/
+robot_infra/robot_servers/build/
+robot_infra/robot_servers/install/
+robot_infra/robot_servers/log/
+
+examples/experiments/**/classifier_data
+examples/experiments/**/classifier_ckpt
+examples/experiments/**/demo_data
+examples/experiments/**/checkpoints

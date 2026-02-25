@@ -216,7 +216,9 @@ class PickOrangesEnvCfg(ManagerBasedRLEnvCfg):
         domain_randomization(
             self,
             random_options=[
-                randomize_object_uniform("Orange001", pose_range={"x": (0.0, 0.03), "y": (-0.03, 0), "z": (0.0, 0.0)}),
+                randomize_object_uniform(
+                    "Orange001", pose_range={"x": (-0.02, -0.02), "y": (-0.02, -0.02), "z": (0, 0)}
+                ),
                 randomize_object_uniform("Orange002", pose_range={"x": (-1, -1), "y": (-1, -1), "z": (0.0, 0.0)}),
                 randomize_object_uniform("Orange003", pose_range={"x": (-1, -1), "y": (-1, -1), "z": (0.0, 0.0)}),
                 randomize_object_uniform("Plate", pose_range={"x": (0.0, 0.0), "y": (0.0, 0.0), "z": (0.0, 0.0)}),

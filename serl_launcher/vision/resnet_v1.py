@@ -206,7 +206,7 @@ def create_encoder(
     if encoder_type == "resnet18-pretrained":
         model_name = "resnet18"
         pretrained = True
-        freeze_backbone = True
+        freeze_backbone = False
     elif encoder_type == "resnet18":
         model_name = "resnet18"
         pretrained = False
@@ -214,7 +214,7 @@ def create_encoder(
     elif encoder_type == "resnet34-pretrained":
         model_name = "resnet34"
         pretrained = True
-        freeze_backbone = True
+        freeze_backbone = False
     elif encoder_type == "resnet34":
         model_name = "resnet34"
         pretrained = False
@@ -222,7 +222,7 @@ def create_encoder(
     elif encoder_type == "resnet50-pretrained":
         model_name = "resnet50"
         pretrained = True
-        freeze_backbone = True
+        freeze_backbone = False
     elif encoder_type == "resnet50":
         model_name = "resnet50"
         pretrained = False

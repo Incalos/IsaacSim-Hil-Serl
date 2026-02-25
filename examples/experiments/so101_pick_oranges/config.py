@@ -25,7 +25,7 @@ class EnvConfig(DefaultEnvConfig):
         "side_camera": lambda img: img[:250, :370, :],
     }
     RANDOM_RESET = False
-    ACTION_SCALE = (0.01, 0.05, 0.25)
+    ACTION_SCALE = (0.03, 0.1, 1)
     MAX_EPISODE_LENGTH = 200
 
 
@@ -33,24 +33,24 @@ class TrainConfig(DefaultTrainingConfig):
     # Observation space and proprioception configuration
     image_keys = ["wrist_camera", "front_camera", "side_camera"]
     classifier_keys = ["wrist_camera", "front_camera", "side_camera"]
-    proprio_keys = ["tcp_pose", "tcp_vel", "tcp_force", "tcp_torque", "q", "dq"]
+    proprio_keys = ["q", "tcp_pose"]
     # Training hyperparameters and buffer management
     buffer_period = 1000
     checkpoint_period = 500
     steps_per_update = 50
     fake_env = False
     image_size = (128, 128)
-    batch_size = 2048
+    batch_size = 128
     cta_ratio = 4
-    discount = 0.97
+    discount = 0.98
     max_steps = 50000
-    replay_buffer_capacity = 200000
+    replay_buffer_capacity = 10000
     # Warm-up phase before gradient updates begin
     random_steps = 0
     training_starts = 100
     log_period = 100
     eval_period = 100
-    encoder_type = "resnet34-pretrained"
+    encoder_type = "resnet50-pretrained"
     demo_path = os.path.join(os.path.dirname(__file__), "demo_data")
 
     def get_environment(self, fake_env=False, save_video=False, classifier=True):
@@ -58,7 +58,6 @@ class TrainConfig(DefaultTrainingConfig):
         env = SO101Env(fake_env=fake_env, config=EnvConfig())
         env = GamepadIntervention(env, guid="0300509d5e040000120b000009050000")
         # Apply SERL-specific observation formatting and temporal chunking
-        # env = RelativeFrame(env)
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
         if classifier:
@@ -74,7 +73,7 @@ class TrainConfig(DefaultTrainingConfig):
                 # $sigmoid(x) = \frac{1}{1 + e^{-x}}$
                 sigmoid = lambda x: 1 / (1 + np.exp(-x))
                 # Threshold set at 0.85 for high-confidence reward signals
-                return int(sigmoid(classifier(obs)) > 0.8)
+                return int(sigmoid(classifier(obs)) > 0.85 and obs["state"][0][5] > 1.0)
 
             env = MultiCameraBinaryRewardClassifierWrapper(env, reward_func)
         return env

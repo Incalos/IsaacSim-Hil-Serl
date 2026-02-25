@@ -278,7 +278,7 @@ def learner(agent: SACAgent, replay_buffer, demo_buffer, wandb_logger=None):
     pbar.update(len(replay_buffer) - pbar.n)
     pbar.close()
 
-    server.publish_network(state_dict_to_numpy(agent.state_dict()))
+    # server.publish_network(state_dict_to_numpy(agent.state_dict()))
     print_green("Sent initial network to actor")
 
     # RLPD: sample batch_size//2 from replay and demo each, concat into one batch.
@@ -310,7 +310,7 @@ def learner(agent: SACAgent, replay_buffer, demo_buffer, wandb_logger=None):
             with torch.no_grad():
                 state_dict = agent.state_dict()
                 numpy_params = state_dict_to_numpy(state_dict)
-            server.publish_network(numpy_params)
+            # server.publish_network(numpy_params)
             del state_dict, numpy_params
             torch.cuda.empty_cache()
 
@@ -402,11 +402,11 @@ def main(_):
                                 store.insert(tx)
             print_green(f"Replay buffer: {len(replay_buffer)} | Demo buffer: {len(demo_buffer)}")
 
-        learner(agent, replay_buffer, demo_buffer, wandb_logger=None)
+        learner(agent, replay_buffer, demo_buffer, wandb_logger=wandb_logger)
 
     elif FLAGS.actor:
-        data_store = QueuedDataStore(20000)
-        intvn_data_store = QueuedDataStore(20000)
+        data_store = QueuedDataStore(10000)
+        intvn_data_store = QueuedDataStore(10000)
         actor(agent, data_store, intvn_data_store, env)
 
     else:

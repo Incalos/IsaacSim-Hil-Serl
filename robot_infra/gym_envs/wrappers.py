@@ -129,12 +129,38 @@ class GamepadIntervention(gym.Wrapper):
     def __init__(self, env, guid):
         super().__init__(env)
         self.expert = GamepadExpert(guid=guid)
+        self.env = env.unwrapped
+        self.g_min = env.unwrapped.gripper_limits[0]
+        self.g_distance = env.unwrapped.gripper_limits[1] - self.g_min
+        self.scale = (0.05, 0.01, 0.25)
+        self.action_scale = env.unwrapped.action_scale
+
+    def calculate_delta_eef(self, curr_eef, next_eef):
+        p_curr = np.array(curr_eef[:3])
+        q_curr = R.from_quat(curr_eef[3:7])
+        p_next = np.array(next_eef[:3])
+        q_next = R.from_quat(next_eef[3:7])
+        delta_p = p_next - p_curr
+        delta_r_obj = q_next * q_curr.inv()
+        delta_axis_angle = delta_r_obj.as_rotvec()
+        delta_eef = np.concatenate([delta_p / self.action_scale[0], delta_axis_angle / self.action_scale[1]])
+        return delta_eef
 
     def action(self, action):
         deltas, intervened = self.expert.get_action()
         if intervened:
             d_sh, d_y, d_z, d_flex, d_roll, d_gr = deltas
-            final_action = np.array([d_sh, d_y, d_z, d_flex, d_roll, d_gr])
+            curr_eef = self.env.curr_eef_poses_quat.copy()
+            next_joint_positions = self.env.curr_joint_positions.copy()
+            next_joint_positions[0] += d_sh * self.scale[0]
+            next_joint_positions[3] += d_flex * self.scale[0]
+            next_joint_positions[4] += d_roll * self.scale[0]
+            gripper_action = 2 * (next_joint_positions[-1] + d_gr * self.scale[2] - self.g_min) / self.g_distance - 1
+            nextpos = self.env.joints_to_eef_fk(next_joint_positions)
+            nextpos[1] += d_y * self.scale[1]
+            nextpos[2] += d_z * self.scale[1]
+            res = self.calculate_delta_eef(curr_eef, nextpos)
+            final_action = np.concatenate([res, [gripper_action / self.action_scale[2]]])
             return final_action, True
         return action, False
 

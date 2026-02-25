@@ -2,9 +2,9 @@
 
 ## Part 1: 熟悉项目细节
 
-### 💡 Code Structure
+### 📁 Code Structure
 
-以下给出了整个项目的代码目录：
+IsaacSim-Hil-Serl 项目的代码结构如下所示：
 
 |Code Directory | Description |
 | :-------: | :---------: |
@@ -15,21 +15,23 @@
 | serl_launcher.data | Replay buffer and data store |
 | serl_launcher.vision | Vision related models and utils |
 | robot_infra | Robot infra for running with real and simulated robots |
-| robot_infra.robot_servers | Flask server for sending commands to robot via ROS2 |
-| robot_infra.gym_env |	Gym env for robot |
-| robot_infra.isaacsim_venvs | IsaacSim env for robot |
+| robot_infra.robot_servers | Flask server for sending commands to robots via ROS2 |
+| robot_infra.gym_env |	Gym environments for robots |
+| robot_infra.isaacsim_venvs | IsaacSim environments for robots |
 
-### 📋 项目运行环境
+### 💻 项目运行环境
 
-- 建议安装 Foxglove Studio, uv。
+运行环境 **Ubantu 22.04**, **CUDA 12.8**, **Python 3.11**。
 
-- 运行环境 Ubantu 22.04, CUDA 12.8, Python 3.11。
-
-### 🚀 安装基础框架
+### 📦 安装基础依赖
 
 ```Bash
 git clone https://github.com/Incalos/IsaacSim-Hil-Serl
 cd IsaacSim-Hil-Serl
+
+# 安装 Foxglove，参考 https://foxglove.dev/download
+
+# 安装 uv，参考 https://docs.astral.sh/uv/getting-started/installation/
 
 # 安装基础 python 环境
 uv venv --python=3.11
@@ -153,7 +155,7 @@ while true; do curl -X POST http://127.0.0.1:5000/get_config; echo; done
 # Robot 恢复初始位姿
 curl -X POST http://127.0.0.1:5000/reset_robot
 # Joints 以 position 的格式发布
-curl -X POST http://127.0.0.1:5000/move_joints -H "Content-Type: application/json" -d '{"joint_pose":[0.1,0.2,0.3,0.4,0.5,0.6]}'
+curl -X POST http://127.0.0.1:5000/move_joints -H "Content-Type: application/json" -d '{"joint_pose":[0,0,0.2,1.0,-1.5708,0.5]}'
 # EEF 以 position + rpy 格式发布
 curl -X POST http://127.0.0.1:5000/move_eef -H "Content-Type: application/json" -d '{"eef_pose":[0.02,-0.23,0.18,21.24,-0.00,-180], "gripper_state":0.1}'
 # EEF 以 position + quaternion (x,y,z,w)格式发布

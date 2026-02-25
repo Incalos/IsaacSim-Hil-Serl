@@ -57,13 +57,13 @@ class SO101Env(gym.Env):
         self._load_yaml_config()
         self._update_currpos()
         # Define normalized Action Space
-        self.action_space = gym.spaces.Box(np.ones((6,), dtype=np.float32) * -1, np.ones((6,), dtype=np.float32))
+        self.action_space = gym.spaces.Box(np.ones((7,), dtype=np.float32) * -1, np.ones((7,), dtype=np.float32))
         # Define multi-modal Observation Space
         self.observation_space = gym.spaces.Dict(
             {
                 "state": gym.spaces.Dict(
                     {
-                        "tcp_pose": gym.spaces.Box(-np.inf, np.inf, shape=(7,)),
+                        "tcp_pose": gym.spaces.Box(-np.inf, np.inf, shape=(6,)),
                         "tcp_vel": gym.spaces.Box(-np.inf, np.inf, shape=(6,)),
                         "tcp_force": gym.spaces.Box(-np.inf, np.inf, shape=(3,)),
                         "tcp_torque": gym.spaces.Box(-np.inf, np.inf, shape=(3,)),
@@ -191,7 +191,7 @@ class SO101Env(gym.Env):
             dict(
                 images=self.get_im(),
                 state={
-                    "tcp_pose": self.curr_eef_poses_quat,
+                    "tcp_pose": self.curr_eef_poses_euler,
                     "tcp_vel": self.curr_eef_velocities,
                     "tcp_force": self.curr_eef_forces,
                     "tcp_torque": self.curr_eef_torques,
@@ -204,16 +204,21 @@ class SO101Env(gym.Env):
     def step(self, action: np.ndarray) -> tuple:
         start_time = time.time()
         action = np.clip(action, self.action_space.low, self.action_space.high)
-        next_joint_positions = self.curr_joint_positions.copy()
-        next_joint_positions[self.indexes] += action[self.indexes] * self.action_scale[1]
-        next_joint_positions[-1] += action[-1] * self.action_scale[2]
-        self.nextpos = self.joints_to_eef_fk(next_joint_positions)
-        self.nextpos[1] += action[1] * self.action_scale[0]
-        self.nextpos[2] += action[2] * self.action_scale[0]
-        self._send_eef_command(self.clip_safety_box(self.nextpos[:7]), self.nextpos[-1])
-        # Control Loop Timing: Maintain 'hz' frequency by sleeping for the remaining budget
+
+        self.nextpos = self.curr_eef_poses_quat.copy()
+        self.nextpos[:3] = self.nextpos[:3] + action[:3] * self.action_scale[0]
+        self.nextpos[3:] = (
+            Rotation.from_rotvec(action[3:6] * self.action_scale[1]) * Rotation.from_quat(self.curr_eef_poses_quat[3:])
+        ).as_quat()
+
+        gripper_action = (
+            (self.gripper_limits[1] - self.gripper_limits[0]) * (action[6] * self.action_scale[2] + 1) / 2.0
+        ) + self.gripper_limits[0]
+
+        self._send_eef_command(self.clip_safety_box(self.nextpos), float(gripper_action))
         self.curr_path_length += 1
-        time.sleep(max(0, (1.0 / self.hz) - (time.time() - start_time)))
+        dt = time.time() - start_time
+        time.sleep(max(0, (1.0 / self.hz) - dt))
         self._update_currpos()
         ob = self._get_obs()
         reward = self.compute_reward(ob)

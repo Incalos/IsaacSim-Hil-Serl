@@ -1,4 +1,5 @@
 import copy
+import sys
 from pathlib import Path
 import struct
 import time
@@ -7,10 +8,34 @@ from typing import Dict, Sequence
 import cv2
 import gymnasium as gym
 import numpy as np
-from pynput import keyboard
 import requests
 from pytransform3d.urdf import UrdfTransformManager
 from scipy.spatial.transform import Rotation
+
+try:
+    from pynput import keyboard
+except ImportError:
+
+    class MockKeyboard:
+        class Listener:
+            @staticmethod
+            def on_press(*args, **kwargs):
+                pass
+
+            @staticmethod
+            def on_release(*args, **kwargs):
+                pass
+
+            @staticmethod
+            def start(*args, **kwargs):
+                return MockKeyboard.Listener()
+
+            @staticmethod
+            def join(*args, **kwargs):
+                pass
+
+    keyboard = MockKeyboard()
+    print("Warning: pynput could not be imported, mock class has been used instead", file=sys.stderr)
 
 
 class DefaultEnvConfig:

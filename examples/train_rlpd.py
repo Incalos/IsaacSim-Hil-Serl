@@ -302,7 +302,17 @@ def main(_):
                 with open(os.path.join(config.demo_path, d), "rb") as f:
                     for tx in pkl.load(f):
                         demo_buffer.insert(tx)
-            print_green(f"Demo buffer size: {len(demo_buffer)}")
+        
+        if FLAGS.checkpoint_path:
+            for buf_type, store in [("buffer", replay_buffer), ("demo_buffer", demo_buffer)]:
+                path = os.path.join(FLAGS.checkpoint_path, buf_type)
+                if os.path.exists(path):
+                    for f_path in glob.glob(os.path.join(path, "*.pkl")):
+                        with open(f_path, "rb") as f:
+                            for tx in pkl.load(f):
+                                store.insert(tx)
+        
+        print_green(f"Replay buffer: {len(replay_buffer)} | Demo buffer: {len(demo_buffer)}")
 
         learner(agent, replay_buffer, demo_buffer, wandb_logger=logger)
 

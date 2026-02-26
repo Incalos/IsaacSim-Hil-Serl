@@ -17,7 +17,7 @@ class DefaultEnvConfig:
     # Hardware communication and asset paths
     SERVER_URL: str = "http://127.0.0.1:5000"
     URDF_PATH: str = "isaacsim_venvs/assets/robots/so101_follower.urdf"
-    ROBOT_CONFIG: str = "robot_infra/robot_servers/src/so101_interfaces/config/so101_params.yaml"
+    ROBOT_CONFIG: str = "robot_servers/src/so101_interfaces/config/so101_params.yaml"
     CAMERA_NAMES: list[str] = ["wrist_camera", "front_camera", "side_camera"]
     # ROI (Region of Interest) cropping to focus on specific workspace areas
     IMAGE_CROP: dict[str, callable] = {

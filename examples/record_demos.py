@@ -46,12 +46,10 @@ def main(_):
     success_needed = FLAGS.successes_needed
     pbar = tqdm(total=success_needed)
     trajectory = []
-    returns = 0
     while success_count < success_needed:
         # Action placeholder; usually overwritten by human teleoperation via the intervention wrapper
         actions = np.zeros(env.action_space.sample().shape)
         next_obs, rew, done, truncated, info = env.step(actions)
-        returns += rew
         # Capture the actual control input if a human operator intervened during the step
         if "intervene_action" in info:
             actions = info["intervene_action"]
@@ -70,7 +68,7 @@ def main(_):
         # Only append to trajectory if recording has been started (b key pressed)
         if recording_started:
             trajectory.append(transition)
-        pbar.set_description(f"Return: {returns} | Recording: {'ON' if recording_started else 'OFF'}")
+        pbar.set_description(f"Recording: {'ON' if recording_started else 'OFF'}")
         obs = next_obs
         if done:
             # Check if we were recording before stopping
@@ -87,7 +85,6 @@ def main(_):
                 pbar.update(1)
             # Reset buffers and environment for the next demonstration attempt
             trajectory = []
-            returns = 0
             obs, info = env.reset()
             print("Reset done. Press 'b' to start recording next trajectory.")
     # Path construction for the persistent demonstration storage

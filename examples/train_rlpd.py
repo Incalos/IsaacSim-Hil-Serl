@@ -15,7 +15,7 @@ import numpy as np
 import pickle as pkl
 from absl import app, flags
 from natsort import natsorted
-from typing import Dict, Any
+from typing import Dict
 from gymnasium.wrappers import RecordEpisodeStatistics
 from serl_launcher.agents.continuous.sac import SACAgent
 from serl_launcher.utils.timer_utils import Timer

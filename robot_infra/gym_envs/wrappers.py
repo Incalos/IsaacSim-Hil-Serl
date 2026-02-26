@@ -71,16 +71,12 @@ class MultiStageBinaryRewardClassifierWrapper(gym.Wrapper):
 
     def compute_reward(self, obs):
         # Accumulates rewards based on a sequence of classifiers for multi-part tasks
-        rewards = [0] * len(self.reward_classifier_func)
         for i, classifier_func in enumerate(self.reward_classifier_func):
             if self.received[i]:
                 continue
-            logit = classifier_func(obs).item()
-            # Threshold set to 0.75 for robust stage-completion detection
-            if sigmoid(logit) >= 0.75:
+            if classifier_func(obs):
                 self.received[i] = True
-                rewards[i] = 1
-        return sum(rewards)
+        return sum(self.received)
 
     def step(self, action):
         obs, rew, done, truncated, info = self.env.step(action)

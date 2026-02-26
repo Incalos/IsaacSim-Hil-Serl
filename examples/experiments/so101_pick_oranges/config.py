@@ -6,7 +6,7 @@ import numpy as np
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
-from robot_infra.gym_envs.wrappers import GamepadIntervention, MultiCameraBinaryRewardClassifierWrapper
+from robot_infra.gym_envs.wrappers import GamepadIntervention, MultiStageBinaryRewardClassifierWrapper
 from robot_infra.gym_envs.so101_env import DefaultEnvConfig, SO101Env
 from serl_launcher.wrappers.serl_obs_wrappers import SERLObsWrapper
 from serl_launcher.wrappers.chunking import ChunkingWrapper
@@ -40,8 +40,8 @@ class TrainConfig(DefaultTrainingConfig):
     steps_per_update = 10
     fake_env = False
     image_size = (128, 128)
-    batch_size = 256
-    cta_ratio = 2
+    batch_size = 128
+    cta_ratio = 4
     discount = 0.97
     max_steps = 50000
     replay_buffer_capacity = 50000
@@ -62,18 +62,23 @@ class TrainConfig(DefaultTrainingConfig):
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
         if classifier:
             # Load the pre-trained neural network for binary success classification
-            classifier = load_classifier_func(
+            classifier1 = load_classifier_func(
                 image_keys=self.classifier_keys,
-                checkpoint_path=os.path.join(os.path.dirname(__file__), "classifier_ckpt", "classifier_model.pth"),
+                checkpoint_path=os.path.join(os.path.dirname(__file__), "classifier_ckpt", "first_stage.pth"),
                 img_size=self.image_size,
             )
+            classifier2 = load_classifier_func(
+                image_keys=self.classifier_keys,
+                checkpoint_path=os.path.join(os.path.dirname(__file__), "classifier_ckpt", "final_stage.pth"),
+                img_size=self.image_size,
+            )
+            sigmoid = lambda x: 1 / (1 + np.exp(-x))
 
-            def reward_func(obs):
-                # Apply sigmoid activation to the classifier output to get success probability
-                # $sigmoid(x) = \frac{1}{1 + e^{-x}}$
-                sigmoid = lambda x: 1 / (1 + np.exp(-x))
-                # Threshold set at 0.85 for high-confidence reward signals
-                return int(sigmoid(classifier(obs)) > 0.85 and obs["state"][0][5] > 1.0)
+            def reward_func1(obs):
+                return int(sigmoid(classifier1(obs)) > 0.75 and obs["state"][0][5] < 0.65)
 
-            env = MultiCameraBinaryRewardClassifierWrapper(env, reward_func)
+            def reward_func2(obs):
+                return int(sigmoid(classifier2(obs)) > 0.75 and obs["state"][0][5] > 1.0)
+
+            env = MultiStageBinaryRewardClassifierWrapper(env, [reward_func1, reward_func2])
         return env

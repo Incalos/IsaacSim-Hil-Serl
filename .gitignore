@@ -186,7 +186,7 @@ robot_infra/robot_servers/build/
 robot_infra/robot_servers/install/
 robot_infra/robot_servers/log/
 
-examples/experiments/**/classifier_data
+examples/experiments/**/classifier_data*
 examples/experiments/**/classifier_ckpt
 examples/experiments/**/demo_data
 examples/experiments/**/checkpoints

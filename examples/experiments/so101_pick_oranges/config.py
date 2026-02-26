@@ -44,13 +44,13 @@ class TrainConfig(DefaultTrainingConfig):
     cta_ratio = 4
     discount = 0.98
     max_steps = 50000
-    replay_buffer_capacity = 10000
+    replay_buffer_capacity = 20000
     # Warm-up phase before gradient updates begin
     random_steps = 0
     training_starts = 100
     log_period = 100
     eval_period = 100
-    encoder_type = "resnet50-pretrained"
+    encoder_type = "resnet34-pretrained"
     demo_path = os.path.join(os.path.dirname(__file__), "demo_data")
 
     def get_environment(self, fake_env=False, save_video=False, classifier=True):

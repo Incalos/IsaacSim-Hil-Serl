@@ -44,18 +44,6 @@ class SO101Env(gym.Env):
         self.camera_names = config.CAMERA_NAMES
         self.indexes = [0, 3, 4]
         self.xyz_bounding_box = self.rpy_bounding_box = None
-        # Initialize URDF Manager for local Forward Kinematics calculations
-        urdf_path = Path(config.URDF_PATH)
-        if not urdf_path.is_absolute():
-            _root = Path(__file__).resolve().parent.parent
-            urdf_path = _root / urdf_path
-        self.tm = UrdfTransformManager()
-        with open(urdf_path, "r") as f:
-            urdf_text = f.read()
-        self.tm.load_urdf(urdf_text)
-        # Pull robot-specific limits and configurations from the remote server
-        self._load_yaml_config()
-        self._update_currpos()
         # Define normalized Action Space
         self.action_space = gym.spaces.Box(np.ones((7,), dtype=np.float32) * -1, np.ones((7,), dtype=np.float32))
         # Define multi-modal Observation Space
@@ -78,6 +66,18 @@ class SO101Env(gym.Env):
         )
         if fake_env:
             return
+        # Initialize URDF Manager for local Forward Kinematics calculations
+        urdf_path = Path(config.URDF_PATH)
+        if not urdf_path.is_absolute():
+            _root = Path(__file__).resolve().parent.parent
+            urdf_path = _root / urdf_path
+        self.tm = UrdfTransformManager()
+        with open(urdf_path, "r") as f:
+            urdf_text = f.read()
+        self.tm.load_urdf(urdf_text)
+        # Pull robot-specific limits and configurations from the remote server
+        self._load_yaml_config()
+        self._update_currpos()
         self.curr_path_length = 0
         self.terminate = False
 

@@ -36,8 +36,8 @@ flags.DEFINE_integer("seed", 42, "Random seed.")
 flags.DEFINE_boolean("learner", False, "Whether this is a learner.")
 flags.DEFINE_boolean("actor", False, "Whether this is an actor.")
 flags.DEFINE_string("ip", "localhost", "IP address of the learner.")
-flags.DEFINE_integer("port_number", 5120, "Port number of the learner.")
-flags.DEFINE_integer("broadcast_port", 5121, "Broadcast port of the learner.")
+flags.DEFINE_integer("port_number", 5220, "Port number of the learner.")
+flags.DEFINE_integer("broadcast_port", 5221, "Broadcast port of the learner.")
 flags.DEFINE_string("checkpoint_path", None, "Path to save checkpoints.")
 flags.DEFINE_integer("eval_checkpoint_step", 0, "Step to evaluate the checkpoint.")
 flags.DEFINE_integer("eval_n_trajs", 0, "Number of trajectories to evaluate.")
@@ -110,6 +110,7 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
                 actions = agent.sample_actions(obs, argmax=False)
                 if isinstance(actions, torch.Tensor):
                     actions = actions.cpu().numpy()
+                print(actions)
                 next_obs, reward, done, truncated, info = env.step(actions)
                 obs = next_obs
                 if done:
@@ -142,8 +143,6 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
     )
 
     def update_params(params):
-        # state_dict = numpy_to_state_dict(params, DEVICE)
-        # agent.load_state_dict(state_dict, strict=False)
         old_params = state_dict_to_numpy(agent.state_dict())
 
         def _diff_norm(old_p, new_p):
@@ -195,7 +194,7 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
 
             # HIL: if human intervened this step, use intervene_action and update intervention stats.
             if "intervene_action" in info:
-                actions = info.pop("intervene_action")
+                actions = info["intervene_action"]
                 intervention_steps += 1
                 if not already_intervened:
                     intervention_count += 1
@@ -203,14 +202,14 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
             else:
                 already_intervened = False
             running_return += reward
-            transition = dict(
+            transition = copy.deepcopy(dict(
                 observations=obs,
                 actions=actions,
                 next_observations=next_obs,
                 rewards=reward,
                 masks=1.0 - done,
                 dones=done or truncated,
-            )
+            ))
             
             data_store.insert(transition)
             transitions.append(copy.deepcopy(transition))
@@ -405,8 +404,8 @@ def main(_):
         learner(agent, replay_buffer, demo_buffer, wandb_logger=wandb_logger)
 
     elif FLAGS.actor:
-        data_store = QueuedDataStore(10000)
-        intvn_data_store = QueuedDataStore(10000)
+        data_store = QueuedDataStore(50000)
+        intvn_data_store = QueuedDataStore(50000)
         actor(agent, data_store, intvn_data_store, env)
 
     else:

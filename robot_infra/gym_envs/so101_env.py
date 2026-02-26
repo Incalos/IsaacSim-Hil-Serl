@@ -132,9 +132,7 @@ class SO101Env(gym.Env):
             self.wrist_flex_limits = ps["wrist_flex_limits"]
             self.wrist_roll_limits = ps["wrist_roll_limits"]
             self.gripper_limits = ps["gripper_limits"]
-        except Exception as e:
-            pass
-        else:
+        except:
             robot_config_path = Path(path)
             if not robot_config_path.is_absolute():
                 _root = Path(__file__).resolve().parent.parent

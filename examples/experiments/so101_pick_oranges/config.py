@@ -40,7 +40,7 @@ class TrainConfig(DefaultTrainingConfig):
     steps_per_update = 50
     fake_env = False
     image_size = (128, 128)
-    batch_size = 512
+    batch_size = 256
     cta_ratio = 4
     discount = 0.98
     max_steps = 50000

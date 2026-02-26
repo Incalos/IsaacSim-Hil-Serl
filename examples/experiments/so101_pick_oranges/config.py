@@ -40,7 +40,7 @@ class TrainConfig(DefaultTrainingConfig):
     steps_per_update = 50
     fake_env = False
     image_size = (128, 128)
-    batch_size = 128
+    batch_size = 512
     cta_ratio = 4
     discount = 0.98
     max_steps = 50000
@@ -50,7 +50,7 @@ class TrainConfig(DefaultTrainingConfig):
     training_starts = 100
     log_period = 100
     eval_period = 100
-    encoder_type = "resnet34-pretrained"
+    encoder_type = "resnet50-pretrained"
     demo_path = os.path.join(os.path.dirname(__file__), "demo_data")
 
     def get_environment(self, fake_env=False, save_video=False, classifier=True):

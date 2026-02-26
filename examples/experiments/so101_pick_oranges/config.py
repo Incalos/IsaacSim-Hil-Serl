@@ -36,20 +36,20 @@ class TrainConfig(DefaultTrainingConfig):
     proprio_keys = ["q", "tcp_pose"]
     # Training hyperparameters and buffer management
     buffer_period = 1000
-    checkpoint_period = 500
-    steps_per_update = 50
+    checkpoint_period = 1000
+    steps_per_update = 10
     fake_env = False
     image_size = (128, 128)
     batch_size = 256
-    cta_ratio = 4
-    discount = 0.98
+    cta_ratio = 2
+    discount = 0.97
     max_steps = 50000
-    replay_buffer_capacity = 20000
+    replay_buffer_capacity = 50000
     # Warm-up phase before gradient updates begin
     random_steps = 0
-    training_starts = 100
+    training_starts = 1000
     log_period = 100
-    eval_period = 100
+    eval_period = 1000
     encoder_type = "resnet34-pretrained"
     demo_path = os.path.join(os.path.dirname(__file__), "demo_data")
 

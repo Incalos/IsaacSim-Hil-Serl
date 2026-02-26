@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-from typing import Tuple
+from typing import Tuple, Optional, Callable
 from agentlace.trainer import TrainerConfig
 
 from serl_launcher.common.wandb import WandBLogger
@@ -15,11 +15,12 @@ def make_sac_pixel_agent(
     image_keys: tuple = ("image",),
     encoder_type: str = "resnet18-pretrained",
     reward_bias: float = 0.0,
-    target_entropy: float = None,
+    target_entropy: Optional[float] = None,
     discount: float = 0.97,
     device: str = "cuda",
     image_size: Tuple[int, int] = (128, 128),
 ) -> SACAgent:
+    """Create SACAgent with optimized [512, 512] ReLU architecture."""
     torch.manual_seed(seed)
 
     agent = SACAgent.create_pixels(
@@ -32,95 +33,70 @@ def make_sac_pixel_agent(
             "tanh_squash_distribution": True,
             "std_parameterization": "exp",
             "std_min": 1e-5,
-            "std_max": 5,
+            "std_max": 2,  # Optimized exploration bound
         },
         critic_network_kwargs={
-            "activation": nn.Tanh(),
+            "activation": nn.ReLU(),
             "use_layer_norm": True,
-            "hidden_dims": [256, 256],
+            "hidden_dims": [512, 512],  # Optimized uniform width
         },
         policy_network_kwargs={
-            "activation": nn.Tanh(),
+            "activation": nn.ReLU(),
             "use_layer_norm": True,
-            "hidden_dims": [256, 256],
+            "hidden_dims": [512, 512],  # Optimized uniform width
         },
         temperature_init=1e-2,
         discount=discount,
-        backup_entropy=False,
+        backup_entropy=True,  # Recommended for RLPD
         critic_ensemble_size=2,
         critic_subsample_size=None,
         reward_bias=reward_bias,
         target_entropy=target_entropy,
         augmentation_function=make_batch_augmentation_func(image_keys),
-        device=device,
         image_size=image_size,
     )
-    return agent
-
-
-def linear_schedule(step: int) -> float:
-    init_value = 10.0
-    end_value = 50.0
-    decay_steps = 15_000
-
-    linear_step = min(step, decay_steps)
-    decayed_value = init_value + (end_value - init_value) * (linear_step / decay_steps)
-    return decayed_value
+    return agent.to(device)
 
 
 def _unpack(batch: dict, image_keys: tuple) -> dict:
-    """
-    Unpack packed obs and next_obs images.
-    When pack_obs_and_next_obs=True, images are stored with an extra time dimension
-    in observations only. This function splits them back into obs and next_obs.
-    """
+    """Unpack packed obs and next_obs images."""
+    obs_dict = batch["observations"]
+    next_obs_dict = batch.get("next_observations", {})
     for pixel_key in image_keys:
-        # Check if pixel_key is in observations but not in next_observations
-        if pixel_key in batch["observations"] and pixel_key not in batch["next_observations"]:
-            obs_pixels = batch["observations"][pixel_key]
+        if pixel_key in obs_dict and pixel_key not in next_obs_dict:
+            obs_pixels = obs_dict[pixel_key]
             if isinstance(obs_pixels, torch.Tensor):
-                # Packed format: (B, T+1, H, W, C) -> split into obs (B, T, H, W, C) and next_obs
-                obs = dict(batch["observations"])
-                next_obs = dict(batch["next_observations"])
-
-                obs[pixel_key] = obs_pixels[:, :-1, ...]
-                next_obs[pixel_key] = obs_pixels[:, 1:, ...]
-
-                batch = dict(batch)
-                batch["observations"] = obs
-                batch["next_observations"] = next_obs
+                # (B, T+1, ...) -> Split into t and t+1
+                batch["observations"] = {**obs_dict, pixel_key: obs_pixels[:, :-1, ...]}
+                batch["next_observations"] = {**next_obs_dict, pixel_key: obs_pixels[:, 1:, ...]}
+                obs_dict, next_obs_dict = batch["observations"], batch["next_observations"]
     return batch
 
 
-def make_batch_augmentation_func(image_keys: tuple) -> callable:
-    def data_augmentation_fn(observations: dict, seed: int) -> dict:
-        # Create a generator from the seed
-        rng = torch.Generator()
-        rng.manual_seed(seed)
+def make_batch_augmentation_func(image_keys: tuple) -> Callable:
+    """Data augmentation closure with consistency between obs and next_obs."""
 
+    def data_augmentation_fn(observations: dict, rng: torch.Generator) -> dict:
+        new_obs = observations.copy()
         for pixel_key in image_keys:
-            if pixel_key in observations:
-                observations = {
-                    **observations,
-                    pixel_key: batched_random_crop(observations[pixel_key], rng=rng, padding=4, num_batch_dims=2),
-                }
-        return observations
+            if pixel_key in new_obs:
+                new_obs[pixel_key] = batched_random_crop(new_obs[pixel_key], rng=rng, padding=4, num_batch_dims=2)
+        return new_obs
 
     def augment_batch(batch: dict, seed: int) -> dict:
-        # First unpack packed obs and next_obs if needed
         batch = _unpack(batch, image_keys)
 
-        obs_seed = seed
-        next_obs_seed = seed + 1
+        # FIXED: Removed 'device' from Generator.
+        # torch.randint requires a CPU generator even for GPU-bound workflows.
+        obs_rng = torch.Generator()
+        obs_rng.manual_seed(seed)
 
-        obs = data_augmentation_fn(batch["observations"], obs_seed)
-        next_obs = data_augmentation_fn(batch["next_observations"], next_obs_seed)
+        next_obs_rng = torch.Generator()
+        next_obs_rng.manual_seed(seed + 1)
 
-        return {
-            **batch,
-            "observations": obs,
-            "next_observations": next_obs,
-        }
+        batch["observations"] = data_augmentation_fn(batch["observations"], obs_rng)
+        batch["next_observations"] = data_augmentation_fn(batch["next_observations"], next_obs_rng)
+        return batch
 
     return augment_batch
 
@@ -134,21 +110,8 @@ def make_trainer_config(port_number: int = 5588, broadcast_port: int = 5589) -> 
 
 
 def make_wandb_logger(
-    project: str = "hil-serl",
-    description: str = "serl_launcher",
-    debug: bool = False,
+    project: str = "hil-serl", description: str = "serl_launcher", debug: bool = False
 ) -> WandBLogger:
     wandb_config = WandBLogger.get_default_config()
-    wandb_config.update(
-        {
-            "project": project,
-            "exp_descriptor": description,
-            "tag": description,
-        }
-    )
-    wandb_logger = WandBLogger(
-        wandb_config=wandb_config,
-        variant={},
-        debug=debug,
-    )
-    return wandb_logger
+    wandb_config.update({"project": project, "exp_descriptor": description, "tag": description})
+    return WandBLogger(wandb_config=wandb_config, variant={}, debug=debug)

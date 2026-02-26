@@ -5,7 +5,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from copy import deepcopy
 from torch.amp import autocast, GradScaler
-
 from serl_launcher.networks.actor_critic_nets import Policy, Critic, CriticEnsemble
 from serl_launcher.networks.lagrange import GeqLagrangeMultiplier
 from serl_launcher.networks.mlp import MLP
@@ -15,12 +14,8 @@ from serl_launcher.common.encoding import EncodingWrapper
 
 class SACAgent:
     """
-    PyTorch implementation of Soft Actor-Critic (SAC) agent.
-    Supports:
-     - SAC (default)
-     - TD3 (policy_kwargs={"std_parameterization": "fixed", "fixed_std": 0.1})
-     - REDQ (critic_ensemble_size=10, critic_subsample_size=2)
-     - SAC-ensemble (critic_ensemble_size>>1)
+    Soft Actor-Critic (SAC) agent with shared visual encoder and automatic mixed-precision training.
+    Designed for continuous-control tasks with pixel observations and ensemble critics.
     """
 
     def __init__(
@@ -41,7 +36,6 @@ class SACAgent:
         self.critic_target = critic_target
         self.temp = temp
         self.encoder = encoder
-
         self.actor_optimizer = actor_optimizer
         self.critic_optimizer = critic_optimizer
         self.temp_optimizer = temp_optimizer
@@ -49,12 +43,13 @@ class SACAgent:
         self.config = config
         self.device = next(actor.parameters()).device
         self._training = True
-
         self.scaler = GradScaler()
 
     def state_dict(self) -> dict:
+        """
+        Serialize agent state including networks, optimizers and non-callable config entries.
+        """
         serializable_config = {k: v for k, v in self.config.items() if not callable(v)}
-
         return {
             "actor": self.actor.state_dict(),
             "critic": self.critic.state_dict(),
@@ -69,12 +64,14 @@ class SACAgent:
         }
 
     def load_state_dict(self, state_dict: dict, strict: bool = True):
+        """
+        Restore agent state from a serialized checkpoint dict.
+        """
         self.actor.load_state_dict(state_dict["actor"], strict=strict)
         self.critic.load_state_dict(state_dict["critic"], strict=strict)
         self.critic_target.load_state_dict(state_dict["critic_target"], strict=strict)
         self.temp.load_state_dict(state_dict["temp"], strict=strict)
         self.encoder.load_state_dict(state_dict["encoder"], strict=strict)
-
         if "actor_optimizer" in state_dict:
             self.actor_optimizer.load_state_dict(state_dict["actor_optimizer"])
         if "critic_optimizer" in state_dict:
@@ -87,6 +84,9 @@ class SACAgent:
             self.config.update(state_dict["config"])
 
     def to(self, device: torch.device) -> "SACAgent":
+        """
+        Move all modules to the specified device.
+        """
         device = torch.device(device) if isinstance(device, str) else device
         self.actor = self.actor.to(device)
         self.critic = self.critic.to(device)
@@ -97,6 +97,9 @@ class SACAgent:
         return self
 
     def train(self, mode: bool = True) -> "SACAgent":
+        """
+        Set training or evaluation mode for all learnable components.
+        """
         self._training = mode
         self.actor.train(mode)
         self.critic.train(mode)
@@ -106,89 +109,83 @@ class SACAgent:
         return self
 
     def eval(self) -> "SACAgent":
+        """
+        Convenience method for switching to evaluation mode.
+        """
         return self.train(False)
 
     def _compute_next_actions(
         self, obs_enc: torch.Tensor, batch: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Sample actions and log-probabilities from the current policy.
+        """
         next_action_distribution = self.actor(obs_enc)
         next_actions, next_actions_log_probs = next_action_distribution.sample_and_log_prob()
-
-        assert next_actions.shape == batch["actions"].shape
-        assert next_actions_log_probs.shape == (batch["actions"].shape[0],)
-
         return next_actions, next_actions_log_probs
 
     def critic_loss_fn(
         self, obs_enc: torch.Tensor, next_obs_enc: torch.Tensor, batch: Dict[str, torch.Tensor]
     ) -> Tuple[torch.Tensor, Dict]:
+        """
+        Compute ensemble critic loss using bootstrapped targets and optional entropy backup.
+        """
         batch_size = batch["rewards"].shape[0]
-
         with torch.no_grad():
             next_actions, next_actions_log_probs = self._compute_next_actions(next_obs_enc, batch)
-
             target_qs = self.critic_target(next_obs_enc, next_actions)
-
+            assert target_qs.shape == (self.config["critic_ensemble_size"], batch_size)
             if self.config["critic_subsample_size"] is not None:
-                indices = torch.randperm(self.config["critic_ensemble_size"])
+                indices = torch.randperm(self.config["critic_ensemble_size"], device=self.device)
                 indices = indices[: self.config["critic_subsample_size"]]
                 target_qs = target_qs[indices]
-
             target_q = target_qs.min(dim=0)[0]
-            assert target_q.shape == (batch_size,)
-
-            # Compute backup
             target = batch["rewards"] + self.config["discount"] * batch["masks"] * target_q
-
             if self.config["backup_entropy"]:
                 temperature = self.temp()
                 target = target - temperature * next_actions_log_probs
-
         current_qs = self.critic(obs_enc, batch["actions"])
         assert current_qs.shape == (self.config["critic_ensemble_size"], batch_size)
-
         critic_loss = F.mse_loss(current_qs, target.unsqueeze(0).expand(self.config["critic_ensemble_size"], -1))
-
         info = {
             "critic_loss": critic_loss.item(),
             "q_values": current_qs.mean().item(),
             "target_q": target.mean().item(),
         }
-
         return critic_loss, info
 
     def actor_loss_fn(self, obs_enc: torch.Tensor) -> Tuple[torch.Tensor, Dict]:
+        """
+        Compute entropy-regularized policy loss using ensemble mean Q-value.
+        """
         temperature = self.temp().detach()
         dist = self.actor(obs_enc)
         actions, log_probs = dist.sample_and_log_prob()
-
-        # Get Q-values for the sampled actions
         q_values = self.critic(obs_enc, actions)
-        q_values = q_values.mean(dim=0)  # Average across ensemble
-
+        q_values = q_values.mean(dim=0)
         actor_loss = (temperature * log_probs - q_values).mean()
-
         info = {
             "actor_loss": actor_loss.item(),
             "entropy": -log_probs.mean().item(),
             "temperature": temperature.item(),
         }
-
         return actor_loss, info
 
     def temperature_loss_fn(self, obs_enc: torch.Tensor, batch: Dict[str, torch.Tensor]) -> Tuple[torch.Tensor, Dict]:
-        """Compute temperature loss and info dict"""
-
-        _, next_actions_log_probs = self._compute_next_actions(obs_enc, batch)
-        entropy = -next_actions_log_probs.mean()
-
-        temperature_loss = self.temp(lhs=entropy.detach(), rhs=self.config["target_entropy"])
-
+        """
+        Adjust temperature (alpha) to match the target policy entropy.
+        """
+        with torch.no_grad():
+            _, log_probs = self._compute_next_actions(obs_enc, batch)
+            entropy = -log_probs.mean()
+        temperature_loss = self.temp(lhs=entropy, rhs=self.config["target_entropy"])
         info = {"temperature_loss": temperature_loss.item()}
         return temperature_loss, info
 
     def _move_batch_to_device(self, batch: Dict) -> Dict:
-        """Recursively move batch tensors to device."""
+        """
+        Recursively move nested batch data structures to the agent device.
+        """
         result = {}
         for k, v in batch.items():
             if isinstance(v, dict):
@@ -196,7 +193,7 @@ class SACAgent:
             elif isinstance(v, torch.Tensor):
                 result[k] = v.to(self.device)
             elif isinstance(v, np.ndarray):
-                result[k] = torch.from_numpy(v).to(self.device)
+                result[k] = torch.from_numpy(v).to(self.device, dtype=torch.float32)
             else:
                 result[k] = v
         return result
@@ -206,76 +203,56 @@ class SACAgent:
         batch: Dict[str, torch.Tensor],
         networks_to_update: FrozenSet[str] = frozenset({"actor", "critic", "temperature"}),
     ) -> Dict:
+        """
+        Perform one SAC update step over the given batch for the selected network components.
+        """
         batch = self._move_batch_to_device(batch)
-        # Apply data augmentation
         if self.config.get("augmentation_function") is not None:
             aug_seed = torch.randint(0, 2**31, (1,)).item()
             batch = self.config["augmentation_function"](batch, aug_seed)
-
         reward_bias = self.config.get("reward_bias", 0.0)
         if reward_bias != 0.0:
-            batch = {**batch, "rewards": batch["rewards"] + reward_bias}
-
+            batch["rewards"] = batch["rewards"] + reward_bias
         info = {}
-
-        obs_enc = self.encoder(batch["observations"])
-        next_obs_enc = self.encoder(batch["next_observations"])
-
-        # Update critic
-        if "critic" in networks_to_update:
-            self.critic_optimizer.zero_grad()
-            self.encoder_optimizer.zero_grad()
-
-            with autocast("cuda"):
+        with autocast("cuda"):
+            obs_enc = self.encoder(batch["observations"])
+            next_obs_enc = self.encoder(batch["next_observations"])
+            if "critic" in networks_to_update:
+                self.critic_optimizer.zero_grad()
+                self.encoder_optimizer.zero_grad()
                 critic_loss, critic_info = self.critic_loss_fn(obs_enc, next_obs_enc.detach(), batch)
-
-            self.scaler.scale(critic_loss).backward()
-            self.scaler.step(self.critic_optimizer)
-            self.scaler.step(self.encoder_optimizer)
-            self.scaler.update()
-            info.update(critic_info)
-
-            with torch.no_grad():
-                tau = self.config["soft_target_update_rate"]
-                for target, source in zip(self.critic_target.parameters(), self.critic.parameters()):
-                    target.data.mul_(1 - tau)
-                    target.data.add_(tau * source.data)
-
-        # Update actor
-        if "actor" in networks_to_update:
-            self.actor_optimizer.zero_grad()
-
-            with autocast("cuda"):
+                self.scaler.scale(critic_loss).backward()
+                self.scaler.step(self.critic_optimizer)
+                self.scaler.step(self.encoder_optimizer)
+                info.update(critic_info)
+                with torch.no_grad():
+                    tau = self.config["soft_target_update_rate"]
+                    for target, source in zip(self.critic_target.parameters(), self.critic.parameters()):
+                        target.data.lerp_(source.data, tau)
+            if "actor" in networks_to_update:
+                self.actor_optimizer.zero_grad()
                 actor_loss, actor_info = self.actor_loss_fn(obs_enc.detach())
-
-            self.scaler.scale(actor_loss).backward()
-            self.scaler.step(self.actor_optimizer)
-            self.scaler.update()
-            info.update(actor_info)
-
-        # Update temperature
-        if "temperature" in networks_to_update:
-            self.temp_optimizer.zero_grad()
-
-            with autocast("cuda"):
-                temp_loss, temp_info = self.temperature_loss_fn(next_obs_enc.detach(), batch)
-
-            self.scaler.scale(temp_loss).backward()
-            self.scaler.step(self.temp_optimizer)
-            self.scaler.update()
-            info.update(temp_info)
-
+                self.scaler.scale(actor_loss).backward()
+                self.scaler.step(self.actor_optimizer)
+                info.update(actor_info)
+            if "temperature" in networks_to_update:
+                self.temp_optimizer.zero_grad()
+                temp_loss, temp_info = self.temperature_loss_fn(obs_enc.detach(), batch)
+                self.scaler.scale(temp_loss).backward()
+                self.scaler.step(self.temp_optimizer)
+                info.update(temp_info)
+        self.scaler.update()
         return info
 
     @torch.no_grad()
     def sample_actions(self, observations: Dict[str, torch.Tensor], argmax: bool = False) -> torch.Tensor:
-        """Sample actions from policy"""
+        """
+        Sample actions from the current policy given raw observations.
+        """
         observations = self._move_batch_to_device(observations)
         obs_enc = self.encoder(observations)
         dist = self.actor(obs_enc)
-        if argmax:
-            return dist.mode()
-        return dist.sample()
+        return dist.mode() if argmax else dist.sample()
 
     @classmethod
     def create_pixels(
@@ -296,26 +273,21 @@ class SACAgent:
         image_size: Tuple[int, int] = (128, 128),
         **kwargs,
     ) -> "SACAgent":
-
+        """
+        Factory for a SACAgent that operates on pixel observations with a visual encoder.
+        """
         image_keys = tuple(image_keys)
-
-        # Default kwargs
-        if critic_network_kwargs is None:
-            critic_network_kwargs = {"hidden_dims": [256, 256]}
-        if policy_network_kwargs is None:
-            policy_network_kwargs = {"hidden_dims": [256, 256]}
-        if policy_kwargs is None:
-            policy_kwargs = {
-                "tanh_squash_distribution": True,
-                "std_parameterization": "exp",
-                "std_min": 1e-5,
-                "std_max": 5,
-            }
-        policy_network_kwargs = {**policy_network_kwargs, "activate_final": True}
-        critic_network_kwargs = {**critic_network_kwargs, "activate_final": True}
-
         action_dim = sample_action.shape[-1]
-
+        critic_network_kwargs = critic_network_kwargs or {"hidden_dims": [256, 256]}
+        policy_network_kwargs = policy_network_kwargs or {"hidden_dims": [256, 256]}
+        policy_kwargs = policy_kwargs or {
+            "tanh_squash_distribution": True,
+            "std_parameterization": "exp",
+            "std_min": 1e-5,
+            "std_max": 5,
+        }
+        policy_network_kwargs.setdefault("activate_final", True)
+        critic_network_kwargs.setdefault("activate_final", True)
         encoders = create_encoder(
             encoder_type=encoder_type,
             image_keys=image_keys,
@@ -331,89 +303,60 @@ class SACAgent:
             enable_stacking=True,
             image_keys=image_keys,
         )
-        # Initialize encoder
-        dummy_obs = {}
-        for k, v in sample_obs.items():
-            if isinstance(v, torch.Tensor):
-                dummy_obs[k] = torch.zeros(1, *v.shape[1:], device="cpu", dtype=v.dtype)
-            elif isinstance(v, np.ndarray):
-                dummy_obs[k] = torch.zeros(1, *v.shape[1:], device="cpu", dtype=torch.float32)
-            else:
-                dummy_obs[k] = v
+        dummy_obs = {
+            k: torch.zeros(1, *v.shape[1:], dtype=torch.float32) for k, v in sample_obs.items() if hasattr(v, "shape")
+        }
         with torch.no_grad():
             _ = encoder_def(dummy_obs, train=False)
         encoder_output_dim = encoder_def.output_dim
-
-        # Create policy network
-        policy_hidden_dims = [encoder_output_dim] + policy_network_kwargs.get("hidden_dims", [256, 256])
-        policy_network = MLP(
-            hidden_dims=policy_hidden_dims,
-            activate_final=True,
-            use_layer_norm=policy_network_kwargs.get("use_layer_norm", False),
-            activations=policy_network_kwargs.get("activation", nn.Tanh()),
-        )
+        policy_hidden_dims = [encoder_output_dim] + policy_network_kwargs["hidden_dims"]
         actor = Policy(
-            network=policy_network,
+            network=MLP(
+                hidden_dims=policy_hidden_dims,
+                activate_final=True,
+                use_layer_norm=policy_network_kwargs.get("use_layer_norm", False),
+                activations=policy_network_kwargs.get("activation", nn.Tanh()),
+            ),
             action_dim=action_dim,
             **policy_kwargs,
         )
-
-        # Create critics
-        critic_hidden_dims = [encoder_output_dim + action_dim] + critic_network_kwargs.get("hidden_dims", [256, 256])
-        critics = []
-        for _ in range(critic_ensemble_size):
-            critic_network = MLP(
-                hidden_dims=critic_hidden_dims,
-                activate_final=True,
-                use_layer_norm=critic_network_kwargs.get("use_layer_norm", False),
-                activations=critic_network_kwargs.get("activation", nn.Tanh()),
+        critic_hidden_dims = [encoder_output_dim + action_dim] + critic_network_kwargs["hidden_dims"]
+        critics = [
+            Critic(
+                MLP(
+                    hidden_dims=critic_hidden_dims,
+                    activate_final=True,
+                    use_layer_norm=critic_network_kwargs.get("use_layer_norm", False),
+                    activations=critic_network_kwargs.get("activation", nn.Tanh()),
+                )
             )
-
-            critics.append(Critic(network=critic_network))
-
+            for _ in range(critic_ensemble_size)
+        ]
         critic = CriticEnsemble(critics)
         critic_target = deepcopy(critic)
-
-        # Create temperature (Lagrange multiplier)
-        temp = GeqLagrangeMultiplier(
-            init_value=temperature_init,
-            constraint_shape=(),
-        )
-        # Set target entropy
-        target_entropy = kwargs.get("target_entropy")
-        if target_entropy is None:
-            target_entropy = -action_dim / 2
-
-        # Build config with pixel-specific fields
+        temp = GeqLagrangeMultiplier(init_value=temperature_init, constraint_shape=())
+        target_entropy = kwargs.get("target_entropy", -float(action_dim))
         config_kwargs = {
             "discount": kwargs.get("discount", 0.97),
             "soft_target_update_rate": kwargs.get("soft_target_update_rate", 0.005),
             "target_entropy": target_entropy,
-            "backup_entropy": kwargs.get("backup_entropy", False),
+            "backup_entropy": kwargs.get("backup_entropy", True),
             "critic_ensemble_size": critic_ensemble_size,
             "critic_subsample_size": critic_subsample_size,
             "image_keys": image_keys,
             "augmentation_function": augmentation_function,
             "reward_bias": reward_bias,
         }
-
-        # Create optimizers
-        temp_optimizer = torch.optim.Adam(temp.parameters(), lr=3e-4)
-        encoder_optimizer = torch.optim.Adam(encoder_def.parameters(), lr=3e-4)
-        actor_optimizer = torch.optim.Adam(actor.parameters(), lr=3e-4)
-        critic_optimizer = torch.optim.Adam(critic.parameters(), lr=3e-4)
-
         agent = cls(
             actor=actor,
             critic=critic,
             critic_target=critic_target,
             temp=temp,
             encoder=encoder_def,
-            actor_optimizer=actor_optimizer,
-            critic_optimizer=critic_optimizer,
-            temp_optimizer=temp_optimizer,
-            encoder_optimizer=encoder_optimizer,
+            actor_optimizer=torch.optim.Adam(actor.parameters(), lr=3e-4),
+            critic_optimizer=torch.optim.Adam(critic.parameters(), lr=3e-4),
+            temp_optimizer=torch.optim.Adam(temp.parameters(), lr=3e-4),
+            encoder_optimizer=torch.optim.Adam(encoder_def.parameters(), lr=3e-4),
             config=config_kwargs,
         )
-
         return agent

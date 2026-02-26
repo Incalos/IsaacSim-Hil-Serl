@@ -37,6 +37,7 @@ cd IsaacSim-Hil-Serl
 uv venv --python=3.11
 source .venv/bin/activate
 uv pip install --upgrade pip
+sudo apt update && sudo apt install -y xvfb x11-utils
 sudo apt install cmake build-essential
 
 # 安装 PyTorch

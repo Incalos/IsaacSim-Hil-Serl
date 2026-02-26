@@ -2,6 +2,7 @@ import copy
 from pathlib import Path
 import struct
 import time
+import yaml
 from typing import Dict, Sequence
 import cv2
 import gymnasium as gym
@@ -16,6 +17,7 @@ class DefaultEnvConfig:
     # Hardware communication and asset paths
     SERVER_URL: str = "http://127.0.0.1:5000"
     URDF_PATH: str = "isaacsim_venvs/assets/robots/so101_follower.urdf"
+    ROBOT_CONFIG: str = "robot_infra/robot_servers/src/so101_interfaces/config/so101_params.yaml"
     CAMERA_NAMES: list[str] = ["wrist_camera", "front_camera", "side_camera"]
     # ROI (Region of Interest) cropping to focus on specific workspace areas
     IMAGE_CROP: dict[str, callable] = {
@@ -64,19 +66,14 @@ class SO101Env(gym.Env):
                 ),
             }
         )
+
+        self._load_urdf(config.URDF_PATH)
+        self._load_yaml_config(config.ROBOT_CONFIG)
+
         if fake_env:
             return
-        # Initialize URDF Manager for local Forward Kinematics calculations
-        urdf_path = Path(config.URDF_PATH)
-        if not urdf_path.is_absolute():
-            _root = Path(__file__).resolve().parent.parent
-            urdf_path = _root / urdf_path
-        self.tm = UrdfTransformManager()
-        with open(urdf_path, "r") as f:
-            urdf_text = f.read()
-        self.tm.load_urdf(urdf_text)
-        # Pull robot-specific limits and configurations from the remote server
-        self._load_yaml_config()
+
+        # Pull configurations from the remote server
         self._update_currpos()
         self.curr_path_length = 0
         self.terminate = False
@@ -101,29 +98,73 @@ class SO101Env(gym.Env):
         self.curr_eef_torques = np.array(ps["eef_torques"])
         self.curr_eef_velocities = np.array(ps["eef_velocities"])
 
-    def _load_yaml_config(self):
+    def _load_urdf(self, path):
+        urdf_path = Path(path)
+        if not urdf_path.is_absolute():
+            _root = Path(__file__).resolve().parent.parent
+            urdf_path = _root / urdf_path
+        self.tm = UrdfTransformManager()
+        with open(urdf_path, "r") as f:
+            urdf_text = f.read()
+        self.tm.load_urdf(urdf_text)
+
+    def _load_yaml_config(self, path):
         # Fetch operational boundaries and hardware limits from the server registry
-        ps = requests.post(self.url + "/get_config").json()
-        self.joint_names = ps["joint_names"]
-        self.reset_pose = np.array(ps["reset_joint_positions"])
-        if (
-            ps["min_translation"] is not None
-            and ps["max_translation"] is not None
-            and ps["min_rotation"] is not None
-            and ps["max_rotation"] is not None
-        ):
-            self.xyz_bounding_box = gym.spaces.Box(
-                np.array(ps["min_translation"]), np.array(ps["max_translation"]), dtype=np.float64
-            )
-            self.rpy_bounding_box = gym.spaces.Box(
-                np.array(ps["min_rotation"]), np.array(ps["max_rotation"]), dtype=np.float64
-            )
-        self.shoulder_pan_limits = ps["shoulder_pan_limits"]
-        self.shoulder_lift_limits = ps["shoulder_lift_limits"]
-        self.elbow_flex_limits = ps["elbow_flex_limits"]
-        self.wrist_flex_limits = ps["wrist_flex_limits"]
-        self.wrist_roll_limits = ps["wrist_roll_limits"]
-        self.gripper_limits = ps["gripper_limits"]
+        try:
+            ps = requests.post(self.url + "/get_config").json()
+            self.joint_names = ps["joint_names"]
+            self.reset_pose = np.array(ps["reset_joint_positions"])
+            if (
+                ps["min_translation"] is not None
+                and ps["max_translation"] is not None
+                and ps["min_rotation"] is not None
+                and ps["max_rotation"] is not None
+            ):
+                self.xyz_bounding_box = gym.spaces.Box(
+                    np.array(ps["min_translation"]), np.array(ps["max_translation"]), dtype=np.float64
+                )
+                self.rpy_bounding_box = gym.spaces.Box(
+                    np.array(ps["min_rotation"]), np.array(ps["max_rotation"]), dtype=np.float64
+                )
+            self.shoulder_pan_limits = ps["shoulder_pan_limits"]
+            self.shoulder_lift_limits = ps["shoulder_lift_limits"]
+            self.elbow_flex_limits = ps["elbow_flex_limits"]
+            self.wrist_flex_limits = ps["wrist_flex_limits"]
+            self.wrist_roll_limits = ps["wrist_roll_limits"]
+            self.gripper_limits = ps["gripper_limits"]
+        except Exception as e:
+            pass
+        else:
+            robot_config_path = Path(path)
+            if not robot_config_path.is_absolute():
+                _root = Path(__file__).resolve().parent.parent
+                robot_config_path = _root / robot_config_path
+            with open(robot_config_path, "r") as f:
+                params = yaml.safe_load(f)
+                self.joint_names = params["joint_names"]
+                self.reset_pose = params.get("reset_joint_positions", [])
+                if (
+                    params["bounding_box"]["min_translation"] is not None
+                    and params["bounding_box"]["max_translation"] is not None
+                    and params["bounding_box"]["min_rotation"] is not None
+                    and params["bounding_box"]["max_rotation"] is not None
+                ):
+                    self.xyz_bounding_box = gym.spaces.Box(
+                        np.array(params["bounding_box"]["min_translation"]),
+                        np.array(params["bounding_box"]["max_translation"]),
+                        dtype=np.float64,
+                    )
+                    self.rpy_bounding_box = gym.spaces.Box(
+                        np.array(params["bounding_box"]["min_rotation"]),
+                        np.array(params["bounding_box"]["max_rotation"]),
+                        dtype=np.float64,
+                    )
+                self.shoulder_pan_limits = params["joint_limits"]["shoulder_pan"]
+                self.shoulder_lift_limits = params["joint_limits"]["shoulder_lift"]
+                self.elbow_flex_limits = params["joint_limits"]["elbow_flex"]
+                self.wrist_flex_limits = params["joint_limits"]["wrist_flex"]
+                self.wrist_roll_limits = params["joint_limits"]["wrist_roll"]
+                self.gripper_limits = params["joint_limits"]["gripper"]
 
     def joints_to_eef_fk(self, joint_positions: Sequence[float]) -> np.ndarray:
         # Use the URDF manager to compute the Cartesian pose of the gripper given joint angles

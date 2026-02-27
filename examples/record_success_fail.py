@@ -12,6 +12,7 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
 flags.DEFINE_integer("successes_needed", 200, "Number of successful transitions to collect.")
 flags.DEFINE_integer("save_interval", 10, "Frequency of saving success batches to disk.")
+flags.DEFINE_string("save_path", None, "Path to save the output files.")
 # Global state flags for keyboard synchronization
 success_key = False
 recording_started = False
@@ -50,7 +51,7 @@ def main(_):
     # Environment is initialized without a classifier as we are currently collecting the data to train one
     env = config.get_environment(fake_env=False, save_video=False, classifier=False)
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    save_path = os.path.join(base_dir, "experiments", FLAGS.exp_name, "classifier_data")
+    save_path = os.path.join(base_dir, "experiments", FLAGS.exp_name, FLAGS.save_path)
     if not os.path.exists(save_path):
         os.makedirs(save_path)
     # failure_buffer stores intermediate steps; success_buffer stores the goal-reaching transitions

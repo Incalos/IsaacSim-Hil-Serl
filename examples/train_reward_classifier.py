@@ -24,6 +24,8 @@ FLAGS = flags.FLAGS
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
 flags.DEFINE_integer("num_epochs", 300, "Number of training epochs.")
 flags.DEFINE_integer("batch_size", 512, "Batch size.")
+flags.DEFINE_string("checkpoint_name", None, "Name of the model checkpoint file.")
+flags.DEFINE_string("data_path", None, "Path to the dataset directory or file.")
 
 
 def main(_):
@@ -32,7 +34,7 @@ def main(_):
     config = CONFIG_MAPPING[FLAGS.exp_name]()
     # Environment instance is used here primarily to infer the observation and action space shapes
     env = config.get_environment(fake_env=True, save_video=False, classifier=False)
-    data_path = os.path.join(os.path.dirname(__file__), "experiments", FLAGS.exp_name, "classifier_data")
+    data_path = os.path.join(os.path.dirname(__file__), "experiments", FLAGS.exp_name, FLAGS.data_path)
     # Initialize ReplayBuffer for Positive (Success) samples with binary label support
     pos_buffer = ReplayBuffer(env.observation_space, env.action_space, capacity=40000, include_label=True, device="cpu")
     success_paths = glob.glob(os.path.join(data_path, "*success*.pkl"))
@@ -115,7 +117,7 @@ def main(_):
     ckpt_dir = os.path.join(os.path.dirname(data_path), "classifier_ckpt")
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
-    save_path = os.path.join(ckpt_dir, "classifier_model.pth")
+    save_path = os.path.join(ckpt_dir, FLAGS.checkpoint_name)
     # Save the full state dictionary for later evaluation or resumed training
     torch.save(
         {

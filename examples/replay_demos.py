@@ -120,8 +120,7 @@ def replay_demos(demo_file, exp_name, max_episodes=None):
 
     for episode_idx, episode in enumerate(tqdm(episodes, desc="Replaying episodes")):
         # Reset environment
-        obs, info = env.reset()
-        episode_reward = 0
+        env.reset()
 
         # Execute actions from the episode
         for step_idx, transition in enumerate(episode):
@@ -148,7 +147,7 @@ def replay_demos(demo_file, exp_name, max_episodes=None):
             # Step the environment with the recorded action
             try:
                 _, rew, done, truncated, info = env.step(action)
-                episode_reward += rew
+                total_reward += rew
             except Exception as e:
                 print(f"\nError executing action at episode {episode_idx}, step {step_idx}: {e}")
                 print(f"Action shape: {action.shape}, dtype: {action.dtype}")
@@ -170,10 +169,7 @@ def replay_demos(demo_file, exp_name, max_episodes=None):
         if info.get("succeed", False):
             success_count += 1
 
-        total_reward += episode_reward
-        print(
-            f"\nEpisode {episode_idx + 1}/{len(episodes)}: Reward={episode_reward:.2f}, Success={info.get('succeed', False)}"
-        )
+        print(f"\nEpisode {episode_idx + 1}/{len(episodes)}: Success={info.get('succeed', False)}")
 
     # Print summary
     print("\n" + "=" * 80)
@@ -182,7 +178,6 @@ def replay_demos(demo_file, exp_name, max_episodes=None):
     print(f"Total episodes replayed: {len(episodes)}")
     print(f"Successful episodes: {success_count}/{len(episodes)}")
     print(f"Success rate: {success_count / len(episodes) * 100:.2f}%")
-    print(f"Total reward: {total_reward:.2f}")
     print(f"Average reward per episode: {total_reward / len(episodes):.2f}")
 
     # Close any OpenCV windows that were opened
@@ -192,7 +187,6 @@ def replay_demos(demo_file, exp_name, max_episodes=None):
 def main(_):
     if FLAGS.demo_file is None or FLAGS.exp_name is None:
         print("Error: Both --demo_file and --exp_name must be specified")
-        print("Usage: python replay_demos.py --exp_name=so101_pick_oranges --demo_file=path/to/demo.pkl")
         return
 
     replay_demos(demo_file=FLAGS.demo_file, exp_name=FLAGS.exp_name, max_episodes=FLAGS.max_episodes)

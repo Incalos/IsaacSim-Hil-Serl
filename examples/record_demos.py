@@ -49,7 +49,7 @@ def main(_):
     while success_count < success_needed:
         # Action placeholder; usually overwritten by human teleoperation via the intervention wrapper
         actions = np.zeros(env.action_space.sample().shape)
-        next_obs, rew, done, truncated, info = env.step(actions)
+        next_obs, rew, done, _, info = env.step(actions)
         # Capture the actual control input if a human operator intervened during the step
         if "intervene_action" in info:
             actions = info["intervene_action"]
@@ -76,7 +76,7 @@ def main(_):
             # Automatically stop recording when episode ends
             if recording_started:
                 recording_started = False
-                print(f"\n[Recording: AUTO-STOPPED] Episode ended. Press 'b' to start next recording.")
+                print(f"\n[AUTO-STOPPED] Episode ended. Press 'b' to start next recording.")
             # Data Filtering: Only commit the trajectory to the final dataset if the task was successful and was being recorded
             if info["succeed"] and was_recording:
                 for transition in trajectory:

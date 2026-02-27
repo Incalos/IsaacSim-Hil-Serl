@@ -90,7 +90,7 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
             done = False
             while not done:
                 # Use deterministic actions for evaluation
-                actions = agent.sample_actions(obs, argmax=True)
+                actions = agent.sample_actions(obs, argmax=False)
                 if isinstance(actions, torch.Tensor):
                     actions = actions.cpu().numpy()
                 obs, reward, done, truncated, _ = env.step(actions)
@@ -302,7 +302,7 @@ def main(_):
                 with open(os.path.join(config.demo_path, d), "rb") as f:
                     for tx in pkl.load(f):
                         demo_buffer.insert(tx)
-        
+
         if FLAGS.checkpoint_path:
             for buf_type, store in [("buffer", replay_buffer), ("demo_buffer", demo_buffer)]:
                 path = os.path.join(FLAGS.checkpoint_path, buf_type)
@@ -311,7 +311,7 @@ def main(_):
                         with open(f_path, "rb") as f:
                             for tx in pkl.load(f):
                                 store.insert(tx)
-        
+
         print_green(f"Replay buffer: {len(replay_buffer)} | Demo buffer: {len(demo_buffer)}")
 
         learner(agent, replay_buffer, demo_buffer, wandb_logger=logger)

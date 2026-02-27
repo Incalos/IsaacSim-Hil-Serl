@@ -38,12 +38,12 @@ def make_sac_pixel_agent(
         critic_network_kwargs={
             "activation": nn.ReLU(),
             "use_layer_norm": True,
-            "hidden_dims": [256, 512, 512, 256, 32],  # Optimized uniform width
+            "hidden_dims": [256, 512, 512, 256, 32],
         },
         policy_network_kwargs={
             "activation": nn.ReLU(),
             "use_layer_norm": True,
-            "hidden_dims": [256, 512, 512, 256, 32],  # Optimized uniform width
+            "hidden_dims": [256, 512, 512, 256, 32],
         },
         temperature_init=1e-2,
         discount=discount,

@@ -40,7 +40,7 @@ class TrainConfig(DefaultTrainingConfig):
     steps_per_update = 10
     fake_env = False
     image_size = (128, 128)
-    batch_size = 128
+    batch_size = 64
     cta_ratio = 4
     discount = 0.97
     max_steps = 50000
@@ -64,21 +64,31 @@ class TrainConfig(DefaultTrainingConfig):
             # Load the pre-trained neural network for binary success classification
             classifier1 = load_classifier_func(
                 image_keys=self.classifier_keys,
-                checkpoint_path=os.path.join(os.path.dirname(__file__), "classifier_ckpt", "first_stage.pth"),
+                checkpoint_path=os.path.join(os.path.dirname(__file__), "classifier_ckpt", "stage1.pth"),
                 img_size=self.image_size,
             )
             classifier2 = load_classifier_func(
                 image_keys=self.classifier_keys,
-                checkpoint_path=os.path.join(os.path.dirname(__file__), "classifier_ckpt", "final_stage.pth"),
+                checkpoint_path=os.path.join(os.path.dirname(__file__), "classifier_ckpt", "stage2.pth"),
                 img_size=self.image_size,
             )
             sigmoid = lambda x: 1 / (1 + np.exp(-x))
 
             def reward_func1(obs):
-                return int(sigmoid(classifier1(obs)) > 0.75 and obs["state"][0][5] < 0.65)
+                prob = sigmoid(classifier1(obs))
+                reward = prob * 5.0
+                is_grasped = prob > 0.75 and obs["state"][0][5] < 0.65
+                if is_grasped:
+                    reward += 20.0
+                return reward, is_grasped
 
             def reward_func2(obs):
-                return int(sigmoid(classifier2(obs)) > 0.75 and obs["state"][0][5] > 1.0)
+                prob = sigmoid(classifier2(obs))
+                reward = prob * 5.0
+                is_placed = prob > 0.75 and obs["state"][0][5] > 1.0
+                if is_placed:
+                    reward += 10.0
+                return reward, is_placed
 
             env = MultiStageBinaryRewardClassifierWrapper(env, [reward_func1, reward_func2])
         return env

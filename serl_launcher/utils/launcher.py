@@ -33,7 +33,7 @@ def make_sac_pixel_agent(
             "tanh_squash_distribution": True,
             "std_parameterization": "exp",
             "std_min": 1e-5,
-            "std_max": 2,  # Optimized exploration bound
+            "std_max": 2,
         },
         critic_network_kwargs={
             "activation": nn.ReLU(),
@@ -47,7 +47,7 @@ def make_sac_pixel_agent(
         },
         temperature_init=1e-2,
         discount=discount,
-        backup_entropy=True,  # Recommended for RLPD
+        backup_entropy=True,
         critic_ensemble_size=2,
         critic_subsample_size=None,
         reward_bias=reward_bias,
@@ -86,13 +86,11 @@ def make_batch_augmentation_func(image_keys: tuple) -> Callable:
     def augment_batch(batch: dict, seed: int) -> dict:
         batch = _unpack(batch, image_keys)
 
-        # FIXED: Removed 'device' from Generator.
-        # torch.randint requires a CPU generator even for GPU-bound workflows.
         obs_rng = torch.Generator()
         obs_rng.manual_seed(seed)
 
         next_obs_rng = torch.Generator()
-        next_obs_rng.manual_seed(seed + 1)
+        next_obs_rng.manual_seed(seed)
 
         batch["observations"] = data_augmentation_fn(batch["observations"], obs_rng)
         batch["next_observations"] = data_augmentation_fn(batch["next_observations"], next_obs_rng)
@@ -101,12 +99,8 @@ def make_batch_augmentation_func(image_keys: tuple) -> Callable:
     return augment_batch
 
 
-def make_trainer_config(port_number: int = 5588, broadcast_port: int = 5589) -> TrainerConfig:
-    return TrainerConfig(
-        port_number=port_number,
-        broadcast_port=broadcast_port,
-        request_types=["send-stats"],
-    )
+def make_trainer_config(port_number: int = 5422, broadcast_port: int = 5423) -> TrainerConfig:
+    return TrainerConfig(port_number=port_number, broadcast_port=broadcast_port, request_types=["send-stats"])
 
 
 def make_wandb_logger(

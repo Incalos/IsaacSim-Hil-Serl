@@ -37,10 +37,10 @@ class TrainConfig(DefaultTrainingConfig):
     # Training hyperparameters and buffer management
     buffer_period = 1000
     checkpoint_period = 1000
-    steps_per_update = 10
+    steps_per_update = 10000
     fake_env = False
     image_size = (128, 128)
-    batch_size = 64
+    batch_size = 128
     cta_ratio = 4
     discount = 0.97
     max_steps = 50000

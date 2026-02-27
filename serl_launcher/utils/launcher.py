@@ -90,7 +90,7 @@ def make_batch_augmentation_func(image_keys: tuple) -> Callable:
         obs_rng.manual_seed(seed)
 
         next_obs_rng = torch.Generator()
-        next_obs_rng.manual_seed(seed)
+        next_obs_rng.manual_seed(seed + 1)
 
         batch["observations"] = data_augmentation_fn(batch["observations"], obs_rng)
         batch["next_observations"] = data_augmentation_fn(batch["next_observations"], next_obs_rng)

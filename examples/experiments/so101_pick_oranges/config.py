@@ -24,7 +24,7 @@ class EnvConfig(DefaultEnvConfig):
         "side_camera": lambda img: img[:250, :370, :],
     }
     RANDOM_RESET = False
-    ACTION_SCALE = (0.03, 0.1, 1)
+    ACTION_SCALE = (0.04, 0.2, 1)
 
 
 class TrainConfig(DefaultTrainingConfig):
@@ -74,18 +74,18 @@ class TrainConfig(DefaultTrainingConfig):
 
             def reward_func1(obs):
                 prob = sigmoid(classifier1(obs))
-                reward = prob * 5.0
+                reward = prob * 2.0
                 is_grasped = prob > 0.75 and obs["state"][0][5] < 0.65
                 if is_grasped:
-                    reward += 20.0
+                    reward += 6.0
                 return reward, is_grasped
 
             def reward_func2(obs):
                 prob = sigmoid(classifier2(obs))
-                reward = prob * 5.0
+                reward = prob * 2.0
                 is_placed = prob > 0.75 and obs["state"][0][5] > 1.0
                 if is_placed:
-                    reward += 10.0
+                    reward += 3.0
                 return reward, is_placed
 
             env = MultiStageBinaryRewardClassifierWrapper(env, [reward_func1, reward_func2])

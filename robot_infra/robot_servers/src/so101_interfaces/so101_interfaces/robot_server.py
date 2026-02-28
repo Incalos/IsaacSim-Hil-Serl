@@ -11,7 +11,7 @@ import rclpy
 from rclpy.node import Node
 from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Image, JointState
-from std_msgs.msg import Float32MultiArray
+from std_msgs.msg import Float32MultiArray, Int8
 from tf2_msgs.msg import TFMessage
 
 
@@ -57,6 +57,7 @@ class SO101ROS2Node(Node):
         # Publishers for commands sent to the robot.
         self.joint_cmd_pub = self.create_publisher(JointState, f"/{self.ros2_namespace}/joint_commands", 10)
         self.eef_cmd_pub = self.create_publisher(Float32MultiArray, f"/{self.ros2_namespace}/eef_commands", 10)
+        self.isaacsim_reset_pub = self.create_publisher(Int8, f"/{self.ros2_namespace}/isaacsim_reset", 10)
         # Subscriptions for joint state and end-effector state feedback.
         self.joint_state_sub = self.create_subscription(
             JointState, f"/{self.ros2_namespace}/joint_states", self._joint_state_callback, 10
@@ -142,6 +143,9 @@ class SO101ROS2Node(Node):
         # Reset joints to the configured reset pose, if available.
         if hasattr(self, "reset_joint_positions") and self.reset_joint_positions:
             self.publish_joint_command(self.reset_joint_positions)
+            msg = Int8()
+            msg.data = 1
+            self.isaacsim_reset_pub.publish(msg)
 
     def publish_joint_command(self, positions: Sequence[float]) -> None:
         if len(positions) != self.num_joints:

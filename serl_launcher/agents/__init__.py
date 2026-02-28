@@ -1,4 +1,4 @@
-from .continuous.sac import SACAgent
+from .sac import SACAgent
 
 
 agents = {

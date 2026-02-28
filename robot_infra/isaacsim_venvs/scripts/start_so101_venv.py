@@ -49,15 +49,7 @@ def main():
         if event.input == carb.input.KeyboardInput.R:
             base_env = env.unwrapped
             all_env_ids = torch.arange(base_env.num_envs, device=base_env.device, dtype=torch.long)
-            idx = 0
-            while True:
-                term_name = f"domain_randomize_{idx}"
-                term_cfg = getattr(env_cfg.events, term_name, None)
-                if term_cfg is None:
-                    break
-                term_cfg.func(base_env, all_env_ids, **term_cfg.params)
-                idx += 1
-        simulation_app.update()
+            base_env.event_manager.apply(mode="reset", env_ids=all_env_ids, global_env_step_count=base_env.common_step_counter)
         return True
 
     # Register the keyboard callback with the application's input interface

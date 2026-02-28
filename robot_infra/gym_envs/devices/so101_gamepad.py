@@ -82,4 +82,4 @@ class GamepadExpert:
 
     def get_action(self) -> Tuple[np.ndarray, bool]:
         # Return the most recent command vector and the active intervention status
-        return np.array(self.latest_data["deltas"]), self.latest_data["intervened"]
+        return np.array(self.latest_data["deltas"]), self.latest_data["intervened"] * 0.05

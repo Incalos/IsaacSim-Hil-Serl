@@ -17,7 +17,7 @@ from absl import app, flags
 from natsort import natsorted
 from typing import Dict
 from gymnasium.wrappers import RecordEpisodeStatistics
-from serl_launcher.agents.continuous.sac import SACAgent
+from serl_launcher.agents.sac import SACAgent
 from serl_launcher.utils.timer_utils import Timer
 from serl_launcher.utils.train_utils import concat_batches
 from agentlace.trainer import TrainerServer, TrainerClient

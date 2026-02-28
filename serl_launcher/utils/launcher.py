@@ -4,7 +4,7 @@ from typing import Tuple, Optional, Callable
 from agentlace.trainer import TrainerConfig
 
 from serl_launcher.common.wandb import WandBLogger
-from serl_launcher.agents.continuous.sac import SACAgent
+from serl_launcher.agents.sac import SACAgent
 from serl_launcher.vision.data_augmentations import batched_random_crop
 
 

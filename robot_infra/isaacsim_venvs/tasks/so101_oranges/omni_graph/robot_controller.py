@@ -2,6 +2,7 @@
 
 import builtins
 from pathlib import Path
+from tkinter import N
 
 from curobo.types.base import TensorDeviceType
 from curobo.types.math import Pose
@@ -23,6 +24,7 @@ builtins._GLOBAL_GRAPH_PATH = None
 builtins._GLOBAL_JOINT_NAMES = None
 builtins._GLOBAL_ROBOT_PRIM = None
 builtins._GLOBAL_ROBOT_ASSET = None
+builtins._GLOBAL_UNWRAP_ENV = None
 
 
 class SO101_OmniGraph_Controller:
@@ -57,6 +59,7 @@ class SO101_OmniGraph_Controller:
         builtins._GLOBAL_GRAPH_PATH = self.graph_path
         builtins._GLOBAL_ROBOT_ASSET = self.env.unwrapped.scene["robot"]
         builtins._GLOBAL_ROBOT_PRIM = Articulation(prim_paths_expr="/World/envs/env_0/Robot")
+        builtins._GLOBAL_UNWRAP_ENV = self.env.unwrapped
 
         tensor_args = TensorDeviceType()
 
@@ -276,6 +279,9 @@ class SO101_OmniGraph_Controller:
                     ("robot_state_script", "omni.graph.scriptnode.ScriptNode"),
                     # Isaac Sim clock publisher.
                     ("isaacsim_clock", "isaacsim.ros2.bridge.ROS2PublishClock"),
+                    # Isaac Sim reset control.
+                    ("isaacsim_reset_sub", "isaacsim.ros2.bridge.ROS2Subscriber"),
+                    ("isaacsim_reset_script", "omni.graph.scriptnode.ScriptNode"),
                 ],
                 keys.SET_VALUES: [
                     # Isaac Sim clock publisher.
@@ -366,6 +372,15 @@ class SO101_OmniGraph_Controller:
                     ("joint_cmd_sub.inputs:nodeNamespace", self.ros2_namespace),
                     ("joint_cmd_sub.inputs:queueSize", 10),
                     ("joint_art_controller.inputs:targetPrim", self.robot_path),
+                    # IsaacSim reset subscriber.
+                    ("isaacsim_reset_sub.inputs:topicName", "isaacsim_reset"),
+                    ("isaacsim_reset_sub.inputs:nodeNamespace", self.ros2_namespace),
+                    ("isaacsim_reset_sub.inputs:queueSize", 10),
+                    ("isaacsim_reset_sub.inputs:messagePackage", "std_msgs"),
+                    ("isaacsim_reset_sub.inputs:messageSubfolder", "msg"),
+                    ("isaacsim_reset_sub.inputs:messageName", "Int8"),
+                    ("isaacsim_reset_script.inputs:scriptPath", str(Path(__file__).parent / "reset_isaacsim_script_node.py")),
+                    ("isaacsim_reset_script.inputs:usePath", True),
                 ],
                 keys.CONNECT: [
                     # Playback tick triggers all nodes.
@@ -378,6 +393,8 @@ class SO101_OmniGraph_Controller:
                     ("on_tick.outputs:tick", "side_render_product.inputs:execIn"),
                     ("on_tick.outputs:tick", "robot_state_script.inputs:execIn"),
                     ("on_tick.outputs:tick", "isaacsim_clock.inputs:execIn"),
+                    ("on_tick.outputs:tick", "isaacsim_reset_sub.inputs:execIn"),
+                    ("on_tick.outputs:tick", "isaacsim_reset_script.inputs:execIn"),
                     # ROS2 context to all ROS2 nodes.
                     ("ros2_context.outputs:context", "wrist_camera_helper.inputs:context"),
                     ("ros2_context.outputs:context", "front_camera_helper.inputs:context"),
@@ -392,6 +409,7 @@ class SO101_OmniGraph_Controller:
                     ("ros2_context.outputs:context", "joint_force_pub.inputs:context"),
                     ("ros2_context.outputs:context", "joint_torque_pub.inputs:context"),
                     ("ros2_context.outputs:context", "isaacsim_clock.inputs:context"),
+                    ("ros2_context.outputs:context", "isaacsim_reset_sub.inputs:context"),
                     # Simulation time to publishers.
                     ("read_simulation_time.outputs:simulationTime", "joint_state_pub.inputs:timeStamp"),
                     ("read_simulation_time.outputs:simulationTime", "eef_pose_pub.inputs:timeStamp"),

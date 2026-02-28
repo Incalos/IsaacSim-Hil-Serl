@@ -72,7 +72,7 @@ class TrainConfig(DefaultTrainingConfig):
             def reward_func(obs):
                 prob = sigmoid(classifier_model(obs))
                 reward = prob * 2.0
-                is_grasped = prob > 0.75 and obs["state"][0][5] < 0.65
+                is_grasped = prob > 0.75 and obs["state"][0][5] < 0.7
                 if is_grasped:
                     reward += 5
                 return reward, is_grasped

@@ -54,6 +54,8 @@ def main(_):
         if "intervene_action" in info:
             actions = info["intervene_action"]
         # Construct transition dictionary for offline reinforcement learning datasets
+        if not all(-1 <= elem <= 1 for elem in actions):
+            print(False)
         transition = copy.deepcopy(
             dict(
                 observations=obs,

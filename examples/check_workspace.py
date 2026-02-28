@@ -7,7 +7,7 @@ from experiments.mappings import CONFIG_MAPPING
 
 FLAGS = flags.FLAGS
 flags.DEFINE_string("exp_name", None, "Experiment name, corresponding to config folder.")
-flags.DEFINE_string("yaml_path", "so101_params.yaml", "Output YAML filename.")
+flags.DEFINE_string("yaml_name", "so101_params.yaml", "Output YAML filename.")
 flags.DEFINE_integer("save_interval", 10, "Save bounding box every N steps.")
 
 
@@ -28,8 +28,8 @@ def main(_):
     assert FLAGS.exp_name in CONFIG_MAPPING, f"Experiment {FLAGS.exp_name} not found."
     config = CONFIG_MAPPING[FLAGS.exp_name]()
     env = config.get_environment(fake_env=False, save_video=False, classifier=False)
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    yaml_path = os.path.join(base_dir, FLAGS.yaml_path)
+    base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'experiments', FLAGS.exp_name)
+    yaml_path = os.path.join(base_dir, FLAGS.yaml_name)
     # Initialize workspace bounds to extreme values for min/max tracking.
     min_translation = np.array([float("inf")] * 3)
     max_translation = np.array([float("-inf")] * 3)

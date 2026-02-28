@@ -1,6 +1,3 @@
-robot_name: SO101
-flask_url: 127.0.0.1
-flask_port: 5000
 joint_names:
 - shoulder_pan
 - shoulder_lift
@@ -51,3 +48,4 @@ bounding_box:
   - 47.81206882960447
   - 4.677470979819102
   - 179.99525731461176
+

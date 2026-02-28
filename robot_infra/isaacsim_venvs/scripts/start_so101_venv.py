@@ -1,17 +1,17 @@
-import argparse
 import os
 import sys
 
 # Calculate the project root path relative to this file and inject it into the system path
 project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 # Define command-line arguments for environment scaling, task selection, and ROS2 scoping
+import argparse
+
 parser = argparse.ArgumentParser(description="OmniGraph robot control for Isaac Lab environments.")
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to simulate.")
-parser.add_argument("--task", type=str, default="SO101-PickOranges", help="Name of the task.")
+parser.add_argument("--task", type=str, help="Name of the task.")
 parser.add_argument("--ros2_namespace", type=str, default="so101", help="ROS2 namespace for topics.")
 
 from isaaclab.app import AppLauncher
@@ -29,9 +29,7 @@ import carb.input
 from isaaclab_tasks.utils import parse_env_cfg
 import omni.appwindow
 from robot_infra.isaacsim_venvs.tasks import *
-from robot_infra.isaacsim_venvs.tasks.so101_pick_oranges.omni_graph.robot_controller import (
-    SO101_OmniGraph_Controller,
-)
+from robot_infra.isaacsim_venvs.tasks.so101_oranges.omni_graph.robot_controller import SO101_OmniGraph_Controller
 
 
 def main():

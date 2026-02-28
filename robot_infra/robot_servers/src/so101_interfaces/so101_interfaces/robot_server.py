@@ -2,7 +2,6 @@ import struct
 import threading
 import time
 from typing import Any, Sequence
-
 from absl import app
 import cv2
 from cv_bridge import CvBridge
@@ -14,7 +13,6 @@ from scipy.spatial.transform import Rotation
 from sensor_msgs.msg import Image, JointState
 from std_msgs.msg import Float32MultiArray
 from tf2_msgs.msg import TFMessage
-import yaml
 
 
 # ROS2 node that bridges robot topics and stores the latest state.
@@ -25,23 +23,20 @@ class SO101ROS2Node(Node):
         self.get_logger().info("SO101ROS2Node initialized")
 
         # Declare parameters if they were not provided by a ROS2 launch file.
-        if not self.has_parameter("config_file"):
-            self.declare_parameter("config_file", "")
-        if not self.has_parameter("use_sim_time"):
-            self.declare_parameter("use_sim_time", False)
-        if not self.has_parameter("namespace"):
-            self.declare_parameter("namespace", "so101")
-
-        self.config_file: str = str(self.get_parameter("config_file").value)
-        self.use_sim_time: bool = bool(self.get_parameter("use_sim_time").value)
-        self.ros2_namespace: str = str(self.get_parameter("namespace").value)
+        self.declare_parameter("namespace", "so101")
+        self.declare_parameter("flask_url", "127.0.0.1")
+        self.declare_parameter("flask_port", 5000)
+        self.declare_parameter("joint_names", ["joints"])
+        self.declare_parameter("reset_joint_positions", [0.0])
+        self.ros2_namespace: str = self.get_parameter("namespace").value
+        self.flask_url: str = self.get_parameter("flask_url").value
+        self.flask_port: int = self.get_parameter("flask_port").value
+        self.joint_names: list[str] = self.get_parameter("joint_names").value
+        self.reset_joint_positions: list[float] = self.get_parameter("reset_joint_positions").value
+        self.num_joints = len(self.joint_names)
 
         # Helper to convert ROS image messages to OpenCV images.
         self.cv_bridge = CvBridge()
-
-        # Load configuration from YAML file and set basic robot metadata.
-        self._load_parameters()
-        self.get_logger().info("Parameters loaded")
 
         # Latest received robot state (updated by ROS2 subscriptions).
         self.joint_positions = np.zeros(self.num_joints, dtype=np.float64)
@@ -93,26 +88,6 @@ class SO101ROS2Node(Node):
         self.side_camera_sub = self.create_subscription(
             Image, f"/{self.ros2_namespace}/side_camera/rgb", self._side_camera_callback, 10
         )
-    def _load_parameters(self):
-        # Load robot configuration and workspace limits from the YAML config file.
-        with open(self.config_file, "r") as f:
-            params = yaml.safe_load(f)
-        self.robot_name = params["robot_name"]
-        self.flask_url = params["flask_url"]
-        self.flask_port = params["flask_port"]
-        self.joint_names = params["joint_names"]
-        self.num_joints = len(self.joint_names)
-        self.reset_joint_positions: list[float] = params.get("reset_joint_positions", [])
-        self.min_translation = params["bounding_box"]["min_translation"]
-        self.max_translation = params["bounding_box"]["max_translation"]
-        self.min_rotation = params["bounding_box"]["min_rotation"]
-        self.max_rotation = params["bounding_box"]["max_rotation"]
-        self.shoulder_pan_limits = params["joint_limits"]["shoulder_pan"]
-        self.shoulder_lift_limits = params["joint_limits"]["shoulder_lift"]
-        self.elbow_flex_limits = params["joint_limits"]["elbow_flex"]
-        self.wrist_flex_limits = params["joint_limits"]["wrist_flex"]
-        self.wrist_roll_limits = params["joint_limits"]["wrist_roll"]
-        self.gripper_limits = params["joint_limits"]["gripper"]
 
     def _joint_state_callback(self, msg: JointState) -> None:
         # Update joint position, velocity, and effort buffers from the latest JointState message.
@@ -159,7 +134,7 @@ class SO101ROS2Node(Node):
 
     def _front_camera_callback(self, msg: Image) -> None:
         self.front_camera = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
-    
+
     def _side_camera_callback(self, msg: Image) -> None:
         self.side_camera = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
 
@@ -236,26 +211,6 @@ class SO101Server:
         # Reset the robot to the configured reset joint positions.
         if self.ros2_node is not None:
             self.ros2_node.reset_robot()
-
-    def get_config(self) -> dict[str, Any] | None:
-        # Return static robot configuration and workspace bounds.
-        if self.ros2_node is None:
-            return None
-        return {
-            "joint_names": self.ros2_node.joint_names,
-            "num_joints": self.ros2_node.num_joints,
-            "reset_joint_positions": self.ros2_node.reset_joint_positions,
-            "min_translation": self.ros2_node.min_translation,
-            "max_translation": self.ros2_node.max_translation,
-            "min_rotation": self.ros2_node.min_rotation,
-            "max_rotation": self.ros2_node.max_rotation,
-            "shoulder_pan_limits": self.ros2_node.shoulder_pan_limits,
-            "shoulder_lift_limits": self.ros2_node.shoulder_lift_limits,
-            "elbow_flex_limits": self.ros2_node.elbow_flex_limits,
-            "wrist_flex_limits": self.ros2_node.wrist_flex_limits,
-            "wrist_roll_limits": self.ros2_node.wrist_roll_limits,
-            "gripper_limits": self.ros2_node.gripper_limits,
-        }
 
     def get_state(self) -> dict[str, Any] | None:
         # Return the latest cached robot state, or None if ROS2 is not yet ready.
@@ -450,10 +405,6 @@ def main():
     @webapp.route("/get_state", methods=["POST"])
     def get_state():
         return jsonify(robot_server.get_state())
-
-    @webapp.route("/get_config", methods=["POST"])
-    def get_config():
-        return jsonify(robot_server.get_config())
 
     webapp.run(host=ros2_node.flask_url, port=ros2_node.flask_port)
 

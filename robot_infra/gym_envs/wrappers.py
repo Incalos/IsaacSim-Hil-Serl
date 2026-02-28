@@ -4,6 +4,39 @@ import numpy as np
 from .devices.so101_gamepad import GamepadExpert
 from scipy.spatial.transform import Rotation as R
 from typing import List
+import time
+
+
+class MultiCameraBinaryRewardClassifierWrapper(gym.Wrapper):
+    def __init__(self, env: Env, reward_classifier_func, target_hz=None):
+        super().__init__(env)
+        self.reward_classifier_func = reward_classifier_func
+        self.target_hz = target_hz
+
+    def compute_reward(self, obs, action):
+        total_reward = -0.1
+        action_norm = np.linalg.norm(action[:6])
+        total_reward -= 0.05 * action_norm
+        r, success = self.reward_classifier_func(obs)
+        total_reward += r
+        return total_reward, success
+
+    def step(self, action):
+        start_time = time.time()
+        obs, rew, done, truncated, info = self.env.step(action)
+        rew, success = self.compute_reward(obs, action)
+        # Binary reward often serves as a terminal signal in sparse-reward environments
+        done = done or success
+        info["succeed"] = success
+        # Enforce consistent control frequency if a target Hz is specified
+        if self.target_hz is not None:
+            time.sleep(max(0, 1 / self.target_hz - (time.time() - start_time)))
+        return obs, rew, done, truncated, info
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+        info["succeed"] = False
+        return obs, info
 
 
 class MultiStageBinaryRewardClassifierWrapper(gym.Wrapper):

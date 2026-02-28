@@ -65,3 +65,10 @@ gym.register(
     disable_env_checker=True,
     kwargs={"env_cfg_entry_point": f"{__name__}.pick_oranges_env_cfg:PickOrangesEnvCfg"},
 )
+
+gym.register(
+    id="SO101-ReachOrange",
+    entry_point="isaaclab.envs:ManagerBasedRLEnv",
+    disable_env_checker=True,
+    kwargs={"env_cfg_entry_point": f"{__name__}.reach_orange_env_cfg:ReachOrangeEnvCfg"},
+)

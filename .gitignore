@@ -186,4 +186,4 @@ robot_infra/robot_servers/build/
 robot_infra/robot_servers/install/
 robot_infra/robot_servers/log/
 
-examples/experiments/**/*/
+examples/experiments/*/*/

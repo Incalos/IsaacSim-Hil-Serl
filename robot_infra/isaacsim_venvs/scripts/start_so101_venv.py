@@ -33,31 +33,32 @@ from robot_infra.isaacsim_venvs.tasks.so101_oranges.omni_graph.robot_controller 
 
 
 def main():
-    # Load task configuration and initialize the Gym-compatible simulation environment
+    # Load environment config and initialize gym environment
     env_cfg = parse_env_cfg(args_cli.task, device=args_cli.device, num_envs=args_cli.num_envs, use_fabric=True)
     env_cfg.recorders = None
     env = gym.make(args_cli.task, cfg=env_cfg)
     env.reset()
-    # Instantiate the OmniGraph controller to bridge Isaac Sim with ROS2 and cuRobo IK
+
+    # Initialize OmniGraph controller for ROS2 and cuRobo IK integration
     SO101_OmniGraph_Controller(env, ros2_namespace=args_cli.ros2_namespace)
 
+    # Keyboard event handler for domain randomization trigger
     def on_keyboard_event(event, *args, **kwargs):
-        # Filter for key press events only
         if event.type != carb.input.KeyboardEventType.KEY_PRESS:
             return True
-        # Manually trigger domain randomization (DR) logic when the 'R' key is pressed
         if event.input == carb.input.KeyboardInput.R:
             base_env = env.unwrapped
             all_env_ids = torch.arange(base_env.num_envs, device=base_env.device, dtype=torch.long)
             base_env.event_manager.apply(mode="reset", env_ids=all_env_ids, global_env_step_count=base_env.common_step_counter)
         return True
 
-    # Register the keyboard callback with the application's input interface
+    # Register keyboard input callback
     app_window = omni.appwindow.get_default_app_window()
     input_interface = carb.input.acquire_input_interface()
     keyboard = app_window.get_keyboard()
     input_interface.subscribe_to_keyboard_events(keyboard, on_keyboard_event)
-    # Print initialization status and active ROS2 topic mappings for user reference
+
+    # Print system information and ROS2 topic mappings
     print("[INFO]: OmniGraph joint control started with ROS2 bridge and cuRobo IK.")
     print("[INFO]: Key R = domain randomization.")
     print(f"[INFO]: ROS2 namespace: {args_cli.ros2_namespace}")
@@ -72,8 +73,10 @@ def main():
     print(f"[INFO]: End-effector states published to: {args_cli.ros2_namespace}/eef_poses")
     print(f"[INFO]: End-effector wrenches published to: {args_cli.ros2_namespace}/eef_wrenches")
     print(f"[INFO]: End-effector velocities published to: {args_cli.ros2_namespace}/eef_velocities")
+    print(f"[INFO]: Environment reset commands published to: {args_cli.ros2_namespace}/isaacsim_reset")
+
+    # Main simulation loop
     try:
-        # Keep the simulation running until the window is closed
         while simulation_app.is_running():
             simulation_app.update()
         print("[INFO]: Simulation stopped")

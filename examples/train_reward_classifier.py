@@ -1,7 +1,6 @@
 import os
 import sys
 
-# Ensure project modules are discoverable by resolving the root directory
 project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.append(project_root)
@@ -10,7 +9,6 @@ import glob
 import pickle as pkl
 import torch
 import torch.nn.functional as F
-import numpy as np
 from tqdm import tqdm
 from absl import app, flags
 import random
@@ -29,13 +27,14 @@ flags.DEFINE_string("data_path", None, "Path to the dataset directory or file.")
 
 
 def main(_):
+    # Set compute device (GPU if available, else CPU)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     assert FLAGS.exp_name in CONFIG_MAPPING, "Experiment folder not found."
     config = CONFIG_MAPPING[FLAGS.exp_name]()
-    # Environment instance is used here primarily to infer the observation and action space shapes
     env = config.get_environment(fake_env=True, save_video=False, classifier=False)
     data_path = os.path.join(os.path.dirname(__file__), "experiments", FLAGS.exp_name, FLAGS.data_path)
-    # Initialize ReplayBuffer for Positive (Success) samples with binary label support
+
+    # Initialize replay buffer for positive (success) samples with binary label support
     pos_buffer = ReplayBuffer(env.observation_space, env.action_space, capacity=40000, include_label=True, device="cpu")
     success_paths = glob.glob(os.path.join(data_path, "*success*.pkl"))
     for path in success_paths:
@@ -49,14 +48,15 @@ def main(_):
                 trans["actions"] = env.action_space.sample()
             pos_buffer.insert(trans)
     pos_iterator = pos_buffer.get_iterator(sample_args={"batch_size": FLAGS.batch_size // 2}, device="cpu")
-    # Initialize ReplayBuffer for Negative (Failure) samples
+
+    # Initialize replay buffer for negative (failure) samples with binary label support
     neg_buffer = ReplayBuffer(env.observation_space, env.action_space, capacity=40000, include_label=True, device="cpu")
     max_samples_per_file = 100
     failure_paths = glob.glob(os.path.join(data_path, "*failure*.pkl"))
     for path in failure_paths:
         with open(path, "rb") as f:
             failure_data = pkl.load(f)
-        # Limit negative samples per file to prevent single long trajectories from dominating the buffer
+        # Limit samples per failure file to avoid trajectory dominance
         if len(failure_data) > max_samples_per_file:
             sampled_indices = random.sample(range(len(failure_data)), max_samples_per_file)
         else:
@@ -70,55 +70,69 @@ def main(_):
                 trans["actions"] = env.action_space.sample()
             neg_buffer.insert(trans)
     neg_iterator = neg_buffer.get_iterator(sample_args={"batch_size": FLAGS.batch_size // 2}, device="cpu")
+
+    # Print buffer sizes for verification
     print(f"Failed buffer size: {len(neg_buffer)}")
     print(f"Success buffer size: {len(pos_buffer)}")
-    # Create the binary classifier using the experiment's specific image keys and resolution
+
+    # Initialize binary classifier model
     model = create_classifier(image_keys=config.classifier_keys, n_way=2, img_size=config.image_size)
     model.to(device)
     optimizer = model.optimizer
     rng = torch.Generator()
     rng.manual_seed(42)
 
+    # Data augmentation function for observation robustness
     def data_augmentation_fn(rng, observations):
-        # Apply visual shifts to make the classifier robust to slight camera perturbations
         for pixel_key in config.classifier_keys:
             observations[pixel_key] = batched_random_crop(observations[pixel_key], rng, padding=4, num_batch_dims=2)
         return observations
 
+    # Single training step implementation
     def train_step(model, optimizer, batch, rng):
         model.train()
         optimizer.zero_grad()
-        # Transfer the observation dictionary and labels to the active compute device (GPU)
+
+        # Transfer batch data to compute device
         if isinstance(batch["observations"], dict):
-            batch["observations"] = {
-                k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch["observations"].items()
-            }
+            batch["observations"] = {k: v.to(device) if isinstance(v, torch.Tensor) else v for k, v in batch["observations"].items()}
         batch["labels"] = batch["labels"].to(device)
+
+        # Apply augmentation and forward pass
         obs = data_augmentation_fn(rng, batch["observations"])
         logits = model(obs, train=True)
         labels = batch["labels"].float().view(-1, 1)
-        # Use Binary Cross Entropy with Logits for numerical stability (replaces Sigmoid + BCE)
+
+        # Calculate loss and backpropagate
         loss = F.binary_cross_entropy_with_logits(logits, labels)
         loss.backward()
         optimizer.step()
+
+        # Calculate training accuracy
         with torch.no_grad():
             preds = (torch.sigmoid(logits) >= 0.5).float()
             accuracy = (preds == labels).float().mean()
         return loss.item(), accuracy.item()
 
+    # Main training loop
     for epoch in tqdm(range(FLAGS.num_epochs)):
-        # Balanced sampling: 50% success and 50% failure transitions per batch
+        # Balance positive/negative samples in each batch
         pos_sample = next(pos_iterator)
         neg_sample = next(neg_iterator)
         batch = concat_batches(pos_sample, neg_sample, axis=0)
+
+        # Execute training step
         train_loss, train_accuracy = train_step(model, optimizer, batch, rng)
+
+        # Print progress at interval
         if (epoch + 1) % 10 == 0 or epoch == 0:
             print(f"Epoch: {epoch+1}, Train Loss: {train_loss:.4f}, Train Accuracy: {train_accuracy:.4f}")
+
+    # Save model checkpoint
     ckpt_dir = os.path.join(os.path.dirname(data_path), "classifier_ckpt")
     if not os.path.exists(ckpt_dir):
         os.makedirs(ckpt_dir)
     save_path = os.path.join(ckpt_dir, FLAGS.checkpoint_name)
-    # Save the full state dictionary for later evaluation or resumed training
     torch.save(
         {
             "epoch": FLAGS.num_epochs,

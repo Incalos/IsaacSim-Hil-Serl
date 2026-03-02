@@ -4,16 +4,15 @@ import numpy as np
 
 
 class VideoWrapper(gym.Wrapper):
-    def __init__(
-        self,
-        env: gym.Env,
-        name: str = "video",
-    ):
+    # Wrapper for recording video frames from gym environment observations
+    def __init__(self, env: gym.Env, name: str = "video"):
         super().__init__(env)
         self._name = name
-        self._video = OrderedDict()
+        self._video = OrderedDict()  # Store video frames by observation keys
+        # Extract image keys (exclude "state" key from observation space)
         self.image_keys = [k for k in self.observation_space.keys() if k != "state"]
 
+    # Get observation frames with optional key filtering
     def get_obs_frames(self, keys=None):
         if keys is None:
             video = {k: np.array(v) for k, v in self._video.items()}
@@ -21,30 +20,38 @@ class VideoWrapper(gym.Wrapper):
             video = {k: np.array(v) for k, v in self._video.items() if k in keys}
         return video
 
+    # Render video by concatenating frames across image keys
     def get_rendered_video(self):
         frames = []
+        # Iterate over frame indices (use first image key to get length)
         for i in range(len(self._video[self.image_keys[0]])):
             frame = []
+            # Collect frame for each image key
             for k in self.image_keys:
                 frame.append(self._video[k][i])
+            # Concatenate frames horizontally for current step
             frames.append(np.concatenate(frame, axis=1))
+        # Concatenate all frames vertically to form full video
         return np.concatenate(frames, axis=0)
 
+    # Add single frame to video storage from current observation
     def _add_frame(self, obs):
-        img = []
         for k in self.image_keys:
             if k in obs:
+                # Initialize key list if not exists, else append frame
                 if k in self._video:
                     self._video[k].append(obs[k])
                 else:
                     self._video[k] = [obs[k]]
 
+    # Override reset to clear video storage and record initial frame
     def reset(self, **kwargs):
         self._video.clear()
         obs, info = super().reset(**kwargs)
         self._add_frame(obs)
         return obs, info
 
+    # Override step to record frame after each environment step
     def step(self, action: np.ndarray):
         obs, reward, done, truncate, info = super().step(action)
         self._add_frame(obs)

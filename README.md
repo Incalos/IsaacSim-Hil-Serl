@@ -1,6 +1,6 @@
 # IsaacSim-Hil-Serl
 
-基于 Isaac Sim 的混合真机强化学习（HIL-SERL）框架，用于在高保真仿真和真实机器人之间搭建统一的真实世界强化学习（Real-World RL）训练闭环。
+基于 Isaac Sim 的混合真机强化学习（HIL-SERL）框架，旨在高保真仿真与真实机器人之间构建统一的现实世界强化学习（Real-World RL）训练闭环。
 
 ## Part 1: 项目准备
 
@@ -8,18 +8,22 @@
 
 IsaacSim-Hil-Serl 项目的主要代码结构如下所示：
 
+<center>
+
 | 目录 | 说明 |
 | :-------: | :---------: |
-| `examples` 	| 策略训练、演示数据采集与奖励分类器训练相关脚本 |
-| `serl_launcher` | IsaacSim-HIL-SERL 的核心启动与训练代码 |
-| `serl_launcher.agents` | 强化学习智能体策略实现（如 SAC） |
-| `serl_launcher.wrappers` | 针对 Gym 环境的包装与适配模块 |
-| `serl_launcher.data` | 回放缓冲区与数据存储模块 |
-| `serl_launcher.vision` | 视觉相关模型与工具函数 |
-| `robot_infra` | 真实与仿真机器人运行所需的基础设施代码 |
-| `robot_infra.robot_servers` | 通过 ROS2 与机器人交互的 Flask 服务端 |
-| `robot_infra.gym_env` | 机器人相关的 Gym 环境定义 |
-| `robot_infra.isaacsim_venvs` | 基于 Isaac Sim 的机器人虚拟环境配置 |
+| `examples` | 工作空间标定、示范数据采集、奖励分类器训练及策略训练相关程序脚本 |
+| `serl_launcher` | IsaacSim-HIL-SERL 框架核心启动逻辑与训练流程实现代码 |
+| `serl_launcher.agents` | 强化学习智能体策略模块（如 SAC 算法）的具体实现 |
+| `serl_launcher.wrappers` | 面向 Gym 环境的封装与适配工具模块 |
+| `serl_launcher.data` | 经验回放缓冲区与数据存储管理模块 |
+| `serl_launcher.vision` | 视觉感知相关模型定义与工具函数实现 |
+| `robot_infra` | 支撑仿真 / 真实机器人运行的基础设施核心代码 |
+| `robot_infra.robot_servers` | 基于 ROS2 与机器人交互的 Flask 服务端实现 |
+| `robot_infra.gym_env` | 机器人任务相关的 Gym 标准化环境定义 |
+| `robot_infra.isaacsim_venvs` | 基于 Isaac Sim 的机器人仿真环境配置与初始化模块 |
+
+</center>
 
 ### 💻 项目运行环境
 
@@ -54,7 +58,7 @@ uv pip install "isaacsim[all,extscache]==5.1.0" --extra-index-url https://pypi.n
 cd dependencies/
 
 # 在 dependencies/ 下安装 Isaac Lab
-git clone git@github.com:isaac-sim/IsaacLab.git
+git clone https://github.com/isaac-sim/IsaacLab.git
 cd IsaacLab/
 ./isaaclab.sh --install
 
@@ -79,19 +83,21 @@ cd agentlace/
 uv pip install -e .
 ```
 
-## Part 2: SO101-PickOranges 任务的 Real-World RL
+## Part 2: SO101-ReachOrange 任务的 Real-World RL
 
-本部分详细介绍如何在 Isaac Sim 仿真环境中配置并训练 SO101 机械臂的真实世界强化学习（Real-World RL）。需要特别说明的是，这里的 Real-World RL 为“伪真机”设置，即通过 Isaac Sim 高保真模拟真实机器人，从而在不直接操作真机的前提下完成策略训练与验证。
+本章节详细介绍在 Isaac Sim 仿真环境中，对 SO101 机械臂进行真实世界强化学习（Real-World RL）的配置与训练流程。
+
+需要特别说明的是，此处的 Real-World RL 采用“伪真机” 仿真设置：通过 Isaac Sim 高保真还原真实机器人环境，在不直接操作实体硬件的前提下，完成策略训练与验证。
 
 ### 🧩 Isaac Sim 资产准备
 
-本部分以开源的 SO101-PickOranges 任务为例，需要先[下载 USD 资源](https://github.com/LightwheelAI/leisaac/releases/tag/v0.1.0)并配置场景文件。
+在开展 SO101 机械臂 Real-World RL 训练前，需先[下载 USD 资源](https://github.com/LightwheelAI/leisaac/releases/tag/v0.1.0)，并完成仿真场景文件的配置。
 
-解压下载好的压缩包，并将资产放置在 `robot_infra/isaacsim_venvs/assets` 文件夹中。
+解压已下载的压缩包，并将其中的资产文件放置到 `robot_infra/isaacsim_venvs/assets` 目录下。
 
-`assets` 文件夹的结构如下：
+`assets` 文件夹的目录结构要求如下：
 
-```
+```shell
 <assets>
 ├── robots/
 │   └── so101_follower.usd
@@ -104,40 +110,46 @@ uv pip install -e .
 
 ### 🤖 熟悉 Isaac Sim 环境
 
-在本部分中，我们将 Isaac Sim 视作“数字孪生”层面的真实世界代理，用于为 SO101 机械臂提供高保真度的物理模拟与实时控制接口。
+Isaac Sim 作为 “数字孪生” 层面的真实世界代理，为 SO101 机械臂提供高保真物理模拟能力与实时控制接口。
 
-针对 SO101 机械臂，我们提供了笛卡尔位姿控制（cartesian pose control）与关节位置控制（joint position control）两种控制模式。为提升 Real-World RL 的鲁棒性，环境中加入了域随机化（domain randomization）策略；按下键盘的 `R` 键即可快速重置环境。
+针对 SO101 机械臂，我们提供**笛卡尔位姿控制（cartesian pose control）**和**关节位置控制（joint position control）**两种控制模式；为提升 Real-World RL 策略的鲁棒性，仿真环境中集成了域随机化（domain randomization）策略，按下键盘 **R** 键可快速重置环境。
 
-机械臂在仿真过程中的物理状态（包括关节力矩、末端位姿、相机图像流等）均通过 ROS2 实时发布，确保算法获取的数据与真实世界物理规律高度一致。推荐使用 Foxglove Studio 进行可视化调试，以实时监控 ROS2 话题并下发控制指令。
+机械臂仿真过程中的核心物理状态（关节力矩、末端位姿、相机图像流等）均通过 ROS2 实时发布，确保算法数据与真实物理规律高度一致。推荐使用 Foxglove Studio 进行可视化调试，以实时监控 ROS2 话题并下发控制指令。
 
 ```Bash
-cd IsaacSim-Hil-Serl/examples/experiments/so101_pick_oranges
+cd IsaacSim-Hil-Serl/examples/experiments/so101_reach_orange
 bash ./1_start_isaacsim_venv.sh
-# Open in a new terminal
+# 新开终端执行以下命令
 bash ./2_foxglove_inspect_data.sh
 ```
 
 ![Foxglove Studio 可视化调试](./assets/foxglove.png "Foxglove Studio 可视化调试")
 
-除了使用 Foxglove Studio 实时监控 ROS2 话题并下发控制指令外，参考 [Hil-Serl](https://github.com/rail-berkeley/hil-serl/blob/main/serl_robot_infra/README.md)，我们还提供基于 Flask Server 的方式与 ROS2 进行通讯。
+除了使用 Foxglove Studio 实时监控 ROS2 话题并下发控制指令外，我们还参考 [Hil-Serl](https://github.com/rail-berkeley/hil-serl/blob/main/serl_robot_infra/README.md 提供了基于 Flask Server 的 ROS2 通讯方式，具体操作步骤如下：
 
-首先，需在 ROS2 的工作空间内编译 Flask Server。
+1.编译 Flask Server
+
+进入 ROS2 工作空间，编译 Flask Server 相关代码：
 
 ```Bash
 cd IsaacSim-Hil-Serl/robot_infra/robot_servers
 colcon build
 ```
 
-之后，依次启动 Isaac Sim 环境以及 Flask Server 节点。
+2.启动仿真环境与服务节点
+
+依次启动 Isaac Sim 仿真环境和 Flask Server 节点：
 
 ```Bash
-cd IsaacSim-Hil-Serl/examples/experiments/so101_pick_oranges
+cd IsaacSim-Hil-Serl/examples/experiments/so101_reach_orange
 bash ./1_start_isaacsim_venv.sh
-# Open in a new terminal
+# 新开终端执行
 bash ./3_start_robot_server.sh
 ```
 
-新开一个终端，输入以下指令，也可实现与 Foxglove Studio 相似的监控与交互功能。
+3.实现监控与交互
+
+新开终端并执行对应指令，即可实现与 Foxglove Studio 功能相似的 ROS2 话题监控和交互操作。
 
 ```Bash
 while true; do curl -X POST http://127.0.0.1:5000/get_joint_positions; echo; done
@@ -153,7 +165,7 @@ while true; do curl -X POST http://127.0.0.1:5000/get_eef_velocities; echo; done
 while true; do curl -X POST http://127.0.0.1:5000/get_eef_jacobians; echo; done
 while true; do curl -X POST http://127.0.0.1:5000/get_state; echo; done
 while true; do curl -X POST http://127.0.0.1:5000/get_config; echo; done
-# Robot 恢复初始位姿
+# Robot 恢复初始位姿并重置 Isaac Sim 环境
 curl -X POST http://127.0.0.1:5000/reset_robot
 # Joints 以 position 的格式发布
 curl -X POST http://127.0.0.1:5000/move_joints -H "Content-Type: application/json" -d '{"joint_pose":[0,0,0.2,1.0,-1.5708,0.5]}'
@@ -165,133 +177,134 @@ curl -X POST http://127.0.0.1:5000/move_eef -H "Content-Type: application/json" 
 
 ### 🛠️ 运行 HIL-SERL
 
-##### Step 1. 定义工作空间
+#### Step 1. 定义工作空间
 
-为避免在强化学习随机探索过程中发生机器人碰撞等危险情况，在训练开始之前，需要根据任务特性预先确定其工作空间。
+为避免强化学习随机探索阶段机械臂发生碰撞等风险，训练前需根据任务特性预先定义机器人的工作空间：
 
 ```Bash
-cd IsaacSim-Hil-Serl/examples/experiments/so101_pick_oranges
+cd IsaacSim-Hil-Serl/examples/experiments/so101_reach_orange
 bash ./1_start_isaacsim_venv.sh
-# Open in a new terminal
+# 新开终端执行
 bash ./3_start_robot_server.sh
-# Open in a new terminal
+# 新开终端执行
 bash ./4_check_robot_workspace.sh
 ```
 
-操作说明：
+**操作说明**：
 
-- 配置文件：程序会实时将工作空间参数保存到 ROS2 参数服务器的配置文件 `robot_infra/robot_servers/src/so101_interfaces/config/so101_params.yaml` 中。
+- 配置文件：工作空间参数会实时保存至本任务目录下的配置文件中 `examples/experiments/so101_reach_orange/so101_params.yaml`；
 
-- Isaac Sim 控制方式：按下键盘上的 `r` 键可以重置环境。
+- Isaac Sim 控制：按下键盘 **r** 键可重置仿真环境；
 
-- 机械臂控制方式：此处仅提供 Gamepad 的控制方式。
+- 机械臂控制：仅支持 Gamepad 手柄控制，按键映射如下：
 
-| 控制按键    | 描述 |
+<center>
+
+| 控制按键 | 描述 |
 | :-------: | :---------: |
-| move `L` forward / backward | 控制末端的前后平移 |
-| move `L` left / right | 控制 `shoulder_pan` 关节，机械臂的左右摆动 |
-| move `R` forward / backward | 控制 `wrist_flex` 关节，末端的上下俯仰 |
-| move `R` left / right | 控制 `wrist_roll` 关节，末端的旋转 |
-| press `LB` / `LT` | 控制末端的上下平移 |
-| press `RB` / `RT` | 控制 `grasp` 关节，末端夹爪的开合 |
+| 左摇杆（L）前后移动 | 控制机械臂末端前后平移 |
+| 左摇杆（L）左右移动 | 控制 `shoulder_pan` 关节（左右摆动） |
+| 右摇杆（R）前后移动 | 控制 `wrist_flex` 关节（末端上下俯仰） |
+| 右摇杆（R）左右移动 | 控制 `wrist_roll` 关节（末端旋转） |
+| 按下 LB / LT 键 | 控制机械臂末端上下平移 |
+| 按下 RB / RT 键 | 控制 `grasp` 关节（夹爪开合） |
 
-工作空间定义好后，需要重新编译 Flask Server，以将最新参数传入参数服务器中。
+</center>
 
-```Bash
-cd IsaacSim-Hil-Serl/robot_infra/robot_servers
-colcon build
-```
+#### Step 2. 训练奖励分类器（Reward Classifier）
 
-##### Step 2. 训练奖励分类器（Reward Classifier）
-
-在本步骤中，我们通过 Gamepad 遥操作机械臂并人工标注关键帧，收集用于训练奖励函数的样本。样本将存放于 `examples/experiments/so101_pick_oranges/classifier_data` 文件夹中。
+本步骤通过 Gamepad 遥操作机械臂并人工标注关键帧，收集奖励函数训练样本（样本存放于 `examples/experiments/so101_reach_orange/classifier_data/`）：
 
 ```Bash
-cd IsaacSim-Hil-Serl/examples/experiments/so101_pick_oranges
+cd IsaacSim-Hil-Serl/examples/experiments/so101_reach_orange
 bash ./1_start_isaacsim_venv.sh
-# Open in a new terminal
+# 新开终端执行
 bash ./3_start_robot_server.sh
-# Open in a new terminal
+# 新开终端执行
 bash ./5_record_classifier_data.sh
 ```
 
-操作说明：
+**操作说明**：
 
-- 机械臂控制方式：参考 [Step 1. 定义工作空间](#step-1-定义工作空间)。
+- 机械臂控制：参考 [定义工作空间](#step-1-定义工作空间)。
 
-- 样本标注方式：
+- 样本标注：
 
-    - 按下 `b` 键开启当前回合（episode）的样本记录。
-    
-    - 按下 `space` 键将当前尝试标记为“成功（Successful）”并终止该回合，机器人将恢复初始位姿。
-    
-    - 当超过单个回合的最大步骤时，当前尝试会自动终止并重置机器人位姿。
+  - 启动记录：按下 `b` 键开始记录当前回合的样本数据；
 
-- Isaac Sim 控制方式：按下键盘上的 `r` 键将重置环境，建议在机器人重置位姿或者任务发生异常时使用。
+  - 手动标记成功：按下 `space` 键可将当前操作标记为 “成功”，系统会立即终止该回合，机器人自动回到初始位姿，同时 Isaac Sim 仿真环境完成重置；
 
-样本采集完成后，运行如下命令训练奖励分类器（Reward Classifier），训练得到的权重将保存在 `examples/experiments/so101_pick_oranges/classifier_ckpt` 文件夹中。
+  - 自动终止重置：若操作步骤超过单回合最大步骤，当前尝试会自动终止，机器人位姿和 Isaac Sim 仿真环境均会自动重置至初始状态。
+
+- Isaac Sim 控制：按下 `r` 键重置环境（建议在机器人复位或任务异常时使用）。
+
+样本采集完成后，执行以下命令训练奖励分类器（权重保存至 `examples/experiments/so101_reach_orange/classifier_ckpt/`）：
 
 ```Bash
-# Open in a new terminal
+# 新开终端执行以下命令
 bash ./6_train_reward_classifier.sh
 ```
 
-##### Step 3. 收集演示数据（Demo）
+#### Step 3. 收集演示数据（Demo）
 
-在正式训练之前，Hil-Serl 需要基于前面训练好的奖励分类器（Reward Classifier）额外采集一批成功的演示数据（demo）。此步骤依然通过 Gamepad 遥操作完成。
+正式训练前，Hil-Serl 需基于已训练的奖励分类器采集一批成功的演示数据（Demo），仍通过 Gamepad 遥操作完成：
 
 ```Bash
-cd IsaacSim-Hil-Serl/examples/experiments/so101_pick_oranges
+cd IsaacSim-Hil-Serl/examples/experiments/so101_reach_orange
 bash ./1_start_isaacsim_venv.sh
-# Open in a new terminal
+# 新开终端执行
 bash ./3_start_robot_server.sh
-# Open in a new terminal
+# 新开终端执行
 bash ./7_record_demos.sh
 ```
 
 操作说明：
 
-- 机械臂控制方式：参考 [Step 1. 定义工作空间](#step-1-定义工作空间)。
+- 机械臂控制：参考 [定义工作空间](#step-1-定义工作空间)。
 
 - Demo 收集方式：
 
-    - 按下 `b` 键开启当前回合（episode）的样本记录，训练好的奖励分类器会自动判断当前操作是否成功。若判断成功，则自动终止当前步骤，并开启新的记录流程。
-    
-    - 当超过单个回合的最大步骤时，当前尝试会自动终止并重置机器人位姿。
+  - 启动记录：按下 `b` 键启动当前回合记录，奖励分类器会自动判定操作是否成功，成功则自动终止回合并开启新记录；
 
-采集好的 demo 将存放于 `examples/experiments/so101_pick_oranges/demo_data` 文件夹中。为了验证采集的 demo 是否存在错误，可以运行如下命令进行回放与验证。
+  - 自动终止重置：若操作步骤超过单回合最大步骤，当前尝试会自动终止，机器人位姿和 Isaac Sim 仿真环境均会自动重置至初始状态。
+
+采集的 Demo 存放于 `examples/experiments/so101_reach_orange/demo_data/`，可通过以下命令回放验证数据有效性：
 
 ```Bash
-# Open in a new terminal
+# 新开终端执行以下命令
 bash ./8_replay_demos.sh
 ```
 
-##### Step 4. Real-World RL 的训练
+#### Step 4. Real-World RL 的训练
 
-参考 [Hil-Serl](https://github.com/rail-berkeley/hil-serl) 的训练方式，在训练前期更多依赖人工介入，引导机械臂完成任务，随着策略性能提升逐步减少人工干预。
+参考 [Hil-Serl](https://github.com/rail-berkeley/hil-serl) 训练范式，训练前期需更多人工介入引导机械臂完成任务，随策略性能提升逐步减少干预：
 
 ```Bash
-cd IsaacSim-Hil-Serl/examples/experiments/so101_pick_oranges
+cd IsaacSim-Hil-Serl/examples/experiments/so101_reach_orange
 bash ./1_start_isaacsim_venv.sh
-# Open in a new terminal
+# 新开终端执行以下命令
 bash ./3_start_robot_server.sh
-# Open in a new terminal
+# 新开终端执行以下命令
 bash ./run_learner.sh
-# Open in a new terminal
+# 新开终端执行以下命令
 bash ./run_actor.sh
 ```
 
 操作说明：
 
-- 机械臂控制方式：参考 [Step 1. 定义工作空间](#step-1-定义工作空间)。
+- 机械臂控制：参考 [定义工作空间](#step-1-定义工作空间)。
 
-##### Step 5. Real-World RL 的验证
+#### Step 5. Real-World RL 的验证
+
+在完成 Real-World RL 训练后，可通过该步骤加载训练好的策略，在 Isaac Sim 高保真仿真环境中对 SO101 机械臂进行任务性能验证。
+
+此环节可直接评估策略在接近真实物理条件下的完成效果、运动稳定性与泛化能力，为后续从仿真迁移到实体机器人提供可信的验证结果。
 
 ```Bash
-cd IsaacSim-Hil-Serl/examples/experiments/so101_pick_oranges
+cd IsaacSim-Hil-Serl/examples/experiments/so101_reach_orange
 bash ./1_start_isaacsim_venv.sh
-# Open in a new terminal
+# 新开终端执行以下命令
 bash ./3_start_robot_server.sh
-# Open in a new terminal
+# 新开终端执行以下命令
 bash ./9_val_actor.sh
 ```

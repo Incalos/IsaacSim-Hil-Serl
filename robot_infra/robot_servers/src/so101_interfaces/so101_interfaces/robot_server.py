@@ -15,14 +15,13 @@ from std_msgs.msg import Float32MultiArray, Int8
 from tf2_msgs.msg import TFMessage
 
 
-# ROS2 node that bridges robot topics and stores the latest state.
 class SO101ROS2Node(Node):
 
     def __init__(self):
         super().__init__("SO101ROS2Node")
         self.get_logger().info("SO101ROS2Node initialized")
 
-        # Declare parameters if they were not provided by a ROS2 launch file.
+        # Declare and get ROS2 parameters
         self.declare_parameter("namespace", "so101")
         self.declare_parameter("flask_url", "127.0.0.1")
         self.declare_parameter("flask_port", 5000)
@@ -35,10 +34,10 @@ class SO101ROS2Node(Node):
         self.reset_joint_positions: list[float] = self.get_parameter("reset_joint_positions").value
         self.num_joints = len(self.joint_names)
 
-        # Helper to convert ROS image messages to OpenCV images.
+        # Initialize CV bridge for image conversion
         self.cv_bridge = CvBridge()
 
-        # Latest received robot state (updated by ROS2 subscriptions).
+        # Initialize robot state buffers
         self.joint_positions = np.zeros(self.num_joints, dtype=np.float64)
         self.joint_velocities = np.zeros(self.num_joints, dtype=np.float64)
         self.joint_efforts = np.zeros(self.num_joints, dtype=np.float64)
@@ -50,48 +49,29 @@ class SO101ROS2Node(Node):
         self.eef_torques = np.zeros(3, dtype=np.float64)
         self.eef_velocities = np.zeros(6, dtype=np.float64)
         self.eef_jacobians = np.zeros((self.num_joints, 6), dtype=np.float64)
-        # Latest RGB images from wrist and front cameras.
         self.wrist_camera = None
         self.front_camera = None
         self.side_camera = None
-        # Publishers for commands sent to the robot.
+
+        # Create ROS2 publishers for robot commands
         self.joint_cmd_pub = self.create_publisher(JointState, f"/{self.ros2_namespace}/joint_commands", 10)
         self.eef_cmd_pub = self.create_publisher(Float32MultiArray, f"/{self.ros2_namespace}/eef_commands", 10)
         self.isaacsim_reset_pub = self.create_publisher(Int8, f"/{self.ros2_namespace}/isaacsim_reset", 10)
-        # Subscriptions for joint state and end-effector state feedback.
-        self.joint_state_sub = self.create_subscription(
-            JointState, f"/{self.ros2_namespace}/joint_states", self._joint_state_callback, 10
-        )
-        self.joint_force_sub = self.create_subscription(
-            Float32MultiArray, f"/{self.ros2_namespace}/joint_forces", self._joint_force_callback, 10
-        )
-        self.joint_torque_sub = self.create_subscription(
-            Float32MultiArray, f"/{self.ros2_namespace}/joint_torques", self._joint_torque_callback, 10
-        )
-        self.eef_pose_sub = self.create_subscription(
-            TFMessage, f"/{self.ros2_namespace}/eef_poses", self._eef_pose_callback, 10
-        )
-        self.eef_wrench_sub = self.create_subscription(
-            Float32MultiArray, f"/{self.ros2_namespace}/eef_wrenches", self._eef_wrench_callback, 10
-        )
-        self.eef_vel_sub = self.create_subscription(
-            Float32MultiArray, f"/{self.ros2_namespace}/eef_velocities", self._eef_vel_callback, 10
-        )
-        self.eef_jacobian_sub = self.create_subscription(
-            Float32MultiArray, f"/{self.ros2_namespace}/eef_jacobians", self._eef_jacobian_callback, 10
-        )
-        self.wrist_camera_sub = self.create_subscription(
-            Image, f"/{self.ros2_namespace}/wrist_camera/rgb", self._wrist_camera_callback, 10
-        )
-        self.front_camera_sub = self.create_subscription(
-            Image, f"/{self.ros2_namespace}/front_camera/rgb", self._front_camera_callback, 10
-        )
-        self.side_camera_sub = self.create_subscription(
-            Image, f"/{self.ros2_namespace}/side_camera/rgb", self._side_camera_callback, 10
-        )
+
+        # Create ROS2 subscriptions for robot state feedback
+        self.joint_state_sub = self.create_subscription(JointState, f"/{self.ros2_namespace}/joint_states", self._joint_state_callback, 10)
+        self.joint_force_sub = self.create_subscription(Float32MultiArray, f"/{self.ros2_namespace}/joint_forces", self._joint_force_callback, 10)
+        self.joint_torque_sub = self.create_subscription(Float32MultiArray, f"/{self.ros2_namespace}/joint_torques", self._joint_torque_callback, 10)
+        self.eef_pose_sub = self.create_subscription(TFMessage, f"/{self.ros2_namespace}/eef_poses", self._eef_pose_callback, 10)
+        self.eef_wrench_sub = self.create_subscription(Float32MultiArray, f"/{self.ros2_namespace}/eef_wrenches", self._eef_wrench_callback, 10)
+        self.eef_vel_sub = self.create_subscription(Float32MultiArray, f"/{self.ros2_namespace}/eef_velocities", self._eef_vel_callback, 10)
+        self.eef_jacobian_sub = self.create_subscription(Float32MultiArray, f"/{self.ros2_namespace}/eef_jacobians", self._eef_jacobian_callback, 10)
+        self.wrist_camera_sub = self.create_subscription(Image, f"/{self.ros2_namespace}/wrist_camera/rgb", self._wrist_camera_callback, 10)
+        self.front_camera_sub = self.create_subscription(Image, f"/{self.ros2_namespace}/front_camera/rgb", self._front_camera_callback, 10)
+        self.side_camera_sub = self.create_subscription(Image, f"/{self.ros2_namespace}/side_camera/rgb", self._side_camera_callback, 10)
 
     def _joint_state_callback(self, msg: JointState) -> None:
-        # Update joint position, velocity, and effort buffers from the latest JointState message.
+        # Update joint state buffers from incoming JointState message
         for i, name in enumerate(self.joint_names):
             if name not in msg.name:
                 continue
@@ -104,43 +84,51 @@ class SO101ROS2Node(Node):
                 self.joint_efforts[i] = float(msg.effort[idx])
 
     def _joint_force_callback(self, msg: Float32MultiArray) -> None:
+        # Update joint forces buffer (reshape to [num_joints, 3])
         self.joint_forces = np.array(msg.data, dtype=np.float64).reshape(self.num_joints, 3)
 
     def _joint_torque_callback(self, msg: Float32MultiArray) -> None:
+        # Update joint torques buffer (reshape to [num_joints, 3])
         self.joint_torques = np.array(msg.data, dtype=np.float64).reshape(self.num_joints, 3)
 
     def _eef_pose_callback(self, msg: TFMessage) -> None:
+        # Update EEF pose (quaternion + Euler angles) from TF message
         target_frame = "gripper"
         for transform_stamped in msg.transforms:
             if transform_stamped.child_frame_id == target_frame:
                 p = transform_stamped.transform.translation
                 q = transform_stamped.transform.rotation
-                # Store EEF pose as position + quaternion and as position + rpy Euler angles (degrees).
                 self.eef_poses_quat = np.array([p.x, p.y, p.z, q.x, q.y, q.z, q.w])
                 self.eef_poses_euler[:3] = np.array([p.x, p.y, p.z])
                 self.eef_poses_euler[3:] = Rotation.from_quat(self.eef_poses_quat[3:]).as_euler("xyz", degrees=True)
 
     def _eef_wrench_callback(self, msg: Float32MultiArray) -> None:
+        # Update EEF forces and torques buffers
         self.eef_forces = np.array(msg.data[0:3], dtype=np.float64)
         self.eef_torques = np.array(msg.data[3:6], dtype=np.float64)
 
     def _eef_vel_callback(self, msg: Float32MultiArray) -> None:
+        # Update EEF velocities buffer
         self.eef_velocities = np.array(msg.data, dtype=np.float64)
 
     def _eef_jacobian_callback(self, msg: Float32MultiArray) -> None:
+        # Update EEF Jacobian buffer (reshape to [num_joints, 6])
         self.eef_jacobians = np.array(msg.data, dtype=np.float64).reshape(self.num_joints, 6)
 
     def _wrist_camera_callback(self, msg: Image) -> None:
+        # Convert and store wrist camera image (BGR8 format)
         self.wrist_camera = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
 
     def _front_camera_callback(self, msg: Image) -> None:
+        # Convert and store front camera image (BGR8 format)
         self.front_camera = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
 
     def _side_camera_callback(self, msg: Image) -> None:
+        # Convert and store side camera image (BGR8 format)
         self.side_camera = self.cv_bridge.imgmsg_to_cv2(msg, "bgr8")
 
     def reset_robot(self) -> None:
-        # Reset joints to the configured reset pose, if available.
+        # Reset robot to predefined joint positions and trigger IsaacSim reset
         if hasattr(self, "reset_joint_positions") and self.reset_joint_positions:
             self.publish_joint_command(self.reset_joint_positions)
             msg = Int8()
@@ -148,6 +136,7 @@ class SO101ROS2Node(Node):
             self.isaacsim_reset_pub.publish(msg)
 
     def publish_joint_command(self, positions: Sequence[float]) -> None:
+        # Validate and publish joint position command
         if len(positions) != self.num_joints:
             self.get_logger().error(f"Expected {self.num_joints} joint positions, got {len(positions)}.")
             return
@@ -161,12 +150,10 @@ class SO101ROS2Node(Node):
         self.joint_cmd_pub.publish(msg)
 
     def publish_eef_command(self, pose: Sequence[float], gripper_state: float) -> None:
-        # Publish an EEF pose command with optional gripper state.
-        # Pose can be 6D [x, y, z, roll, pitch, yaw] in degrees or 7D [x, y, z, qx, qy, qz, qw].
+        # Process and publish EEF pose command (6D Euler -> 7D quaternion)
         pose_list = [float(x) for x in pose]
         if len(pose_list) == 6:
-            # Convert rpy Euler angles (degrees) to quaternion.
-            quat = Rotation.from_euler("xyz", pose_list[3:6], degrees=True).as_quat()  # [qx, qy, qz, qw]
+            quat = Rotation.from_euler("xyz", pose_list[3:6], degrees=True).as_quat()
             pose_list = pose_list[:3] + quat.tolist()
         elif len(pose_list) != 7:
             self.get_logger().error(f"Expected 6 or 7 pose components, got {len(pose)}.")
@@ -178,7 +165,6 @@ class SO101ROS2Node(Node):
 
 
 class SO101Server:
-    # High-level wrapper around SO101ROS2Node and convenience helpers for HTTP handlers.
 
     def __init__(self) -> None:
         self.ros2_node: SO101ROS2Node | None = None
@@ -186,8 +172,7 @@ class SO101Server:
         self._init_ros2()
 
     def _init_ros2(self) -> None:
-        # Start ROS2 in a background thread and create the node instance.
-
+        # Initialize ROS2 node in background thread
         def ros2_spin() -> None:
             rclpy.init()
             self.ros2_node = SO101ROS2Node()
@@ -202,22 +187,22 @@ class SO101Server:
             raise RuntimeError("Failed to initialize ROS2 node.")
 
     def move_joints(self, positions: Sequence[float]) -> None:
-        # Send a joint-position command to the robot.
+        # Wrapper for joint command publication
         if self.ros2_node is not None:
             self.ros2_node.publish_joint_command(positions)
 
     def move_eef(self, pose: Sequence[float], gripper_state: float = 0.0) -> None:
-        # Send an end-effector pose command with optional gripper state.
+        # Wrapper for EEF command publication
         if self.ros2_node is not None:
             self.ros2_node.publish_eef_command(pose, gripper_state)
 
     def reset_robot(self) -> None:
-        # Reset the robot to the configured reset joint positions.
+        # Wrapper for robot reset functionality
         if self.ros2_node is not None:
             self.ros2_node.reset_robot()
 
     def get_state(self) -> dict[str, Any] | None:
-        # Return the latest cached robot state, or None if ROS2 is not yet ready.
+        # Get consolidated robot state as dictionary
         if self.ros2_node is None:
             return None
 
@@ -236,12 +221,13 @@ class SO101Server:
         }
 
     def get_images(self, quality: int | None = None) -> Response:
-        # Return encoded images from all cameras in a single binary response.
+        # Encode and return all camera images as binary response
         if self.ros2_node is None:
             abort(503, description="ROS2 node not ready")
         names = ["wrist_camera", "front_camera", "side_camera"]
         q = quality if quality is not None else 85
         parts: list[bytes] = []
+
         for name in names:
             img = getattr(self.ros2_node, name, None)
             if img is None:
@@ -250,6 +236,7 @@ class SO101Server:
             blob = buf.tobytes()
             parts.append(struct.pack(">I", len(blob)))
             parts.append(blob)
+
         body = b"".join(parts)
         return Response(
             body,
@@ -260,86 +247,76 @@ class SO101Server:
             },
         )
 
+    # Individual state getter methods
     def get_joint_positions(self) -> list[float] | None:
-        # Return the latest cached joint positions.
         if self.ros2_node is None:
             return None
         return self.ros2_node.joint_positions.tolist()
 
     def get_joint_velocities(self) -> list[float] | None:
-        # Return the latest cached joint velocities.
         if self.ros2_node is None:
             return None
         return self.ros2_node.joint_velocities.tolist()
 
     def get_joint_efforts(self) -> list[float] | None:
-        # Return the latest cached joint efforts.
         if self.ros2_node is None:
             return None
         return self.ros2_node.joint_efforts.tolist()
 
     def get_joint_forces(self) -> list[list[float]] | None:
-        # Return the latest cached joint forces (shape [num_joints][3]).
         if self.ros2_node is None:
             return None
         return self.ros2_node.joint_forces.tolist()
 
     def get_joint_torques(self) -> list[list[float]] | None:
-        # Return the latest cached joint torques (shape [num_joints][3]).
         if self.ros2_node is None:
             return None
         return self.ros2_node.joint_torques.tolist()
 
     def get_eef_poses_quat(self) -> list[float] | None:
-        # Return the latest cached EEF pose [x, y, z, qx, qy, qz, qw].
         if self.ros2_node is None:
             return None
         return self.ros2_node.eef_poses_quat.tolist()
 
     def get_eef_poses_euler(self) -> list[float] | None:
-        # Return the latest cached EEF pose [x, y, z, roll, pitch, yaw] (degrees, rpy).
         if self.ros2_node is None:
             return None
         return self.ros2_node.eef_poses_euler.tolist()
 
     def get_eef_forces(self) -> list[float] | None:
-        # Return the latest cached EEF forces [fx, fy, fz].
         if self.ros2_node is None:
             return None
         return self.ros2_node.eef_forces.tolist()
 
     def get_eef_torques(self) -> list[float] | None:
-        # Return the latest cached EEF torques [tx, ty, tz].
         if self.ros2_node is None:
             return None
         return self.ros2_node.eef_torques.tolist()
 
     def get_eef_velocities(self) -> list[float] | None:
-        # Return the latest cached EEF twist [vx, vy, vz, wx, wy, wz].
         if self.ros2_node is None:
             return None
         return self.ros2_node.eef_velocities.tolist()
 
     def get_eef_jacobians(self) -> list[list[float]] | None:
-        # Return the latest cached EEF Jacobian (shape [num_joints][6]).
         if self.ros2_node is None:
             return None
         return self.ros2_node.eef_jacobians.tolist()
 
 
 def main():
-    # Start the Flask server and expose HTTP endpoints for robot control and state queries.
+    # Initialize Flask server and define API endpoints
     webapp = Flask(__name__)
-
-    # Create the high-level robot server with its ROS2 node.
     robot_server = SO101Server()
     ros2_node = robot_server.ros2_node
+
     if ros2_node is None:
         raise RuntimeError("ROS2 node is not ready.")
 
-    # Allow some time for ROS2 subscriptions to receive initial data.
+    # Wait for initial ROS2 data reception
     time.sleep(1.0)
 
+    # Define HTTP endpoints for robot state queries
     @webapp.route("/get_joint_positions", methods=["POST"])
     def get_joint_positions():
         return jsonify(robot_server.get_joint_positions())
@@ -388,6 +365,7 @@ def main():
     def get_images():
         return robot_server.get_images()
 
+    # Define HTTP endpoints for robot control
     @webapp.route("/reset_robot", methods=["POST"])
     def reset_robot():
         robot_server.reset_robot()
@@ -410,6 +388,7 @@ def main():
     def get_state():
         return jsonify(robot_server.get_state())
 
+    # Start Flask web server
     webapp.run(host=ros2_node.flask_url, port=ros2_node.flask_port)
 
 

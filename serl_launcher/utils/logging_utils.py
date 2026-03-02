@@ -8,7 +8,6 @@ import os
 from copy import copy
 from socket import gethostname
 import cloudpickle as pickle
-import time
 from collections import deque
 from typing import Optional
 import numpy as np
@@ -16,7 +15,7 @@ import gymnasium as gym
 
 
 class WandBLogger(object):
-
+    # Get default configuration for WandB logger with optional updates
     @staticmethod
     def get_default_config(updates=None):
         config = ConfigDict()
@@ -34,29 +33,35 @@ class WandBLogger(object):
             config.update(ConfigDict(updates).copy_and_resolve_references())
         return config
 
+    # Initialize WandB logger with config and experiment variant
     def __init__(self, config, variant):
         self.config = self.get_default_config(config)
 
+        # Generate unique experiment ID if not provided
         if self.config.experiment_id is None:
             self.config.experiment_id = uuid.uuid4().hex
 
+        # Add prefix to project name if specified
         if self.config.prefix != "":
             self.config.project = "{}--{}".format(self.config.prefix, self.config.project)
 
+        # Set up output directory (temp dir if empty, else create experiment subdir)
         if self.config.output_dir == "":
             self.config.output_dir = tempfile.mkdtemp()
         else:
             self.config.output_dir = os.path.join(self.config.output_dir, self.config.experiment_id)
             os.makedirs(self.config.output_dir, exist_ok=True)
 
+        # Copy variant and add hostname if missing
         self._variant = copy(variant)
-
         if "hostname" not in self._variant:
             self._variant["hostname"] = gethostname()
 
+        # Add random delay if configured
         if self.config.random_delay > 0:
             time.sleep(np.random.uniform(0, self.config.random_delay))
 
+        # Initialize WandB run
         self.run = wandb.init(
             reinit=True,
             config=self._variant,
@@ -73,80 +78,38 @@ class WandBLogger(object):
             mode="online" if self.config.online else "offline",
         )
 
+    # Log metrics to WandB
     def log(self, *args, **kwargs):
         self.run.log(*args, **kwargs)
 
+    # Save object to pickle file in output directory
     def save_pickle(self, obj, filename):
         with open(os.path.join(self.config.output_dir, filename), "wb") as fout:
             pickle.dump(obj, fout)
 
+    # Property for experiment ID
     @property
     def experiment_id(self):
         return self.config.experiment_id
 
+    # Property for experiment variant
     @property
     def variant(self):
         return self.config.variant
 
+    # Property for output directory
     @property
     def output_dir(self):
         return self.config.output_dir
 
 
-"""Wrapper that tracks the cumulative rewards and episode lengths."""
-
-
 class RecordEpisodeStatistics(gym.Wrapper, gym.utils.RecordConstructorArgs):
-    """This wrapper will keep track of cumulative rewards and episode lengths.
-
-    At the end of an episode, the statistics of the episode will be added to ``info``
-    using the key ``episode``. If using a vectorized environment also the key
-    ``_episode`` is used which indicates whether the env at the respective index has
-    the episode statistics.
-
-    After the completion of an episode, ``info`` will look like this::
-
-        >>> info = {
-        ...     "episode": {
-        ...         "r": "<cumulative reward>",
-        ...         "l": "<episode length>",
-        ...         "t": "<elapsed time since beginning of episode>"
-        ...     },
-        ... }
-
-    For a vectorized environments the output will be in the form of::
-
-        >>> infos = {
-        ...     "final_observation": "<array of length num-envs>",
-        ...     "_final_observation": "<boolean array of length num-envs>",
-        ...     "final_info": "<array of length num-envs>",
-        ...     "_final_info": "<boolean array of length num-envs>",
-        ...     "episode": {
-        ...         "r": "<array of cumulative reward>",
-        ...         "l": "<array of episode length>",
-        ...         "t": "<array of elapsed time since beginning of episode>"
-        ...     },
-        ...     "_episode": "<boolean array of length num-envs>"
-        ... }
-
-    Moreover, the most recent rewards and episode lengths are stored in buffers that can be accessed via
-    :attr:`wrapped_env.return_queue` and :attr:`wrapped_env.length_queue` respectively.
-
-    Attributes:
-        return_queue: The cumulative rewards of the last ``deque_size``-many episodes
-        length_queue: The lengths of the last ``deque_size``-many episodes
-    """
-
+    # Initialize episode statistics tracker wrapper
     def __init__(self, env: gym.Env, deque_size: int = 100):
-        """This wrapper will keep track of cumulative rewards and episode lengths.
-
-        Args:
-            env (Env): The environment to apply the wrapper
-            deque_size: The size of the buffers :attr:`return_queue` and :attr:`length_queue`
-        """
         gym.utils.RecordConstructorArgs.__init__(self, deque_size=deque_size)
         super().__init__(env)
 
+        # Detect vectorized environment properties
         try:
             self.num_envs = self.get_wrapper_attr("num_envs")
             self.is_vector_env = self.get_wrapper_attr("is_vector_env")
@@ -154,6 +117,7 @@ class RecordEpisodeStatistics(gym.Wrapper, gym.utils.RecordConstructorArgs):
             self.num_envs = 1
             self.is_vector_env = False
 
+        # Initialize episode tracking variables
         self.episode_count = 0
         self.episode_start_times: np.ndarray = None
         self.episode_returns: Optional[np.ndarray] = None
@@ -161,55 +125,58 @@ class RecordEpisodeStatistics(gym.Wrapper, gym.utils.RecordConstructorArgs):
         self.return_queue = deque(maxlen=deque_size)
         self.length_queue = deque(maxlen=deque_size)
 
+    # Reset environment and episode statistics
     def reset(self, **kwargs):
-        """Resets the environment using kwargs and resets the episode returns and lengths."""
         obs, info = self.env.reset(**kwargs)
         self.episode_start_times = np.full(self.num_envs, time.perf_counter(), dtype=np.float32)
         self.episode_returns = np.zeros(self.num_envs, dtype=np.float32)
         self.episode_lengths = np.zeros(self.num_envs, dtype=np.int32)
         return obs, info
 
+    # Step through environment and update episode statistics
     def step(self, action):
-        """Steps through the environment, recording the episode statistics."""
-        (
-            observations,
-            rewards,
-            terminations,
-            truncations,
-            infos,
-        ) = self.env.step(action)
-        assert isinstance(
-            infos, dict
-        ), f"`info` dtype is {type(infos)} while supported dtype is `dict`. This may be due to usage of other wrappers in the wrong order."
+        observations, rewards, terminations, truncations, infos = self.env.step(action)
+
+        # Validate info type (prevent wrapper order issues)
+        assert isinstance(infos, dict), f"`info` dtype is {type(infos)} while supported dtype is `dict`."
+
+        # Update cumulative returns and lengths
         self.episode_returns += rewards
         self.episode_lengths += 1
+
+        # Check for completed episodes (terminated or truncated)
         dones = np.logical_or(terminations, truncations)
         num_dones = np.sum(dones)
+
+        # Process completed episodes
         if num_dones:
+            # Prevent duplicate episode stats in info
             if "episode" in infos or "_episode" in infos:
                 raise ValueError("Attempted to add episode stats when they already exist")
-            else:
-                infos["episode"] = {
-                    "r": np.where(dones, self.episode_returns, 0.0),
-                    "l": np.where(dones, self.episode_lengths, 0),
-                    "t": np.where(
-                        dones,
-                        np.round(time.perf_counter() - self.episode_start_times, 6),
-                        0.0,
-                    ),
-                }
-                if self.is_vector_env:
-                    infos["_episode"] = np.where(dones, True, False)
+
+            # Add episode stats to info dict
+            infos["episode"] = {
+                "r": np.where(dones, self.episode_returns, 0.0),
+                "l": np.where(dones, self.episode_lengths, 0),
+                "t": np.where(
+                    dones,
+                    np.round(time.perf_counter() - self.episode_start_times, 6),
+                    0.0,
+                ),
+            }
+
+            # Add vector env episode flag if needed
+            if self.is_vector_env:
+                infos["_episode"] = np.where(dones, True, False)
+
+            # Update episode buffers and counters
             self.return_queue.extend(self.episode_returns[dones])
             self.length_queue.extend(self.episode_lengths[dones])
             self.episode_count += num_dones
+
+            # Reset tracking for completed environments
             self.episode_lengths[dones] = 0
             self.episode_returns[dones] = 0
             self.episode_start_times[dones] = time.perf_counter()
-        return (
-            observations,
-            rewards,
-            terminations,
-            truncations,
-            infos,
-        )
+
+        return observations, rewards, terminations, truncations, infos

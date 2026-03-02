@@ -1,20 +1,19 @@
-"""SO101 pick-oranges environment assets and Gymnasium registration."""
-
 from pathlib import Path
-
 import gymnasium as gym
-
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import AssetBaseCfg
 from isaaclab.assets.articulation import ArticulationCfg
 import isaaclab.sim as sim_utils
 
+# Define root paths for scene and robot assets
 SCENES_ROOT = Path(__file__).parent.parent.parent / "assets" / "scenes"
 ROBOTS_ROOT = Path(__file__).parent.parent.parent / "assets" / "robots"
 
+# Configure kitchen scene with orange asset
 KITCHEN_WITH_ORANGE_USD_PATH = str(SCENES_ROOT / "kitchen_with_orange" / "scene.usd")
 KITCHEN_WITH_ORANGE_CFG = AssetBaseCfg(spawn=sim_utils.UsdFileCfg(usd_path=KITCHEN_WITH_ORANGE_USD_PATH))
 
+# Configure SO101 follower robot articulation
 SO101_FOLLOWER_ASSET_PATH = str(ROBOTS_ROOT / "so101_follower.usd")
 SO101_FOLLOWER_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
@@ -40,25 +39,26 @@ SO101_FOLLOWER_CFG = ArticulationCfg(
         },
     ),
     actuators={
-        "joints": ImplicitActuatorCfg(
-            joint_names_expr=[
-                "shoulder_pan",
-                "shoulder_lift",
-                "elbow_flex",
-                "wrist_flex",
-                "wrist_roll",
-                "gripper",
-            ],
-            effort_limit_sim=10,
-            velocity_limit_sim=10,
-            stiffness=17.8,
-            damping=0.6,
-        )
+        "joints":
+            ImplicitActuatorCfg(
+                joint_names_expr=[
+                    "shoulder_pan",
+                    "shoulder_lift",
+                    "elbow_flex",
+                    "wrist_flex",
+                    "wrist_roll",
+                    "gripper",
+                ],
+                effort_limit_sim=10,
+                velocity_limit_sim=10,
+                stiffness=17.8,
+                damping=0.6,
+            )
     },
     soft_joint_pos_limit_factor=1.0,
 )
 
-# Register the environment so it can be created via `gym.make("SO101-PickOranges", cfg=...)`.
+# Register pick-oranges environment with Gymnasium
 gym.register(
     id="SO101-PickOranges",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",
@@ -66,6 +66,7 @@ gym.register(
     kwargs={"env_cfg_entry_point": f"{__name__}.pick_oranges_env_cfg:PickOrangesEnvCfg"},
 )
 
+# Register reach-orange environment with Gymnasium
 gym.register(
     id="SO101-ReachOrange",
     entry_point="isaaclab.envs:ManagerBasedRLEnv",

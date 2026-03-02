@@ -7,10 +7,8 @@ from serl_launcher.data.dataset import Dataset, DatasetDict
 
 
 def _init_replay_dict(obs_space: gym.Space, capacity: int, device: torch.device) -> Union[torch.Tensor, DatasetDict]:
-    """Initialize replay buffer storage based on observation space"""
+    # Initialize storage structure based on observation space type
     if isinstance(obs_space, gym.spaces.Box):
-        # Initialize as numpy array first, then convert to torch tensor
-        # This is more memory efficient for large buffers
         return torch.from_numpy(np.empty((capacity, *obs_space.shape), dtype=obs_space.dtype)).to(device)
     elif isinstance(obs_space, gym.spaces.Dict):
         data_dict = {}
@@ -22,11 +20,11 @@ def _init_replay_dict(obs_space: gym.Space, capacity: int, device: torch.device)
 
 
 def _insert_recursively(dataset_dict: DatasetDict, data_dict: DatasetDict, insert_index: int):
-    """Recursively insert data into dataset dictionary"""
+    # Recursively insert data into nested dataset structure
     if isinstance(dataset_dict, (torch.Tensor, np.ndarray)):
         if isinstance(data_dict, np.ndarray):
             dataset_dict[insert_index] = torch.from_numpy(data_dict).to(dataset_dict.device)
-        elif isinstance(data_dict, np.generic):  # Handle numpy scalars (np.bool_, np.float64, etc.)
+        elif isinstance(data_dict, np.generic):
             dataset_dict[insert_index] = data_dict.item()
         else:
             dataset_dict[insert_index] = data_dict
@@ -38,6 +36,7 @@ def _insert_recursively(dataset_dict: DatasetDict, data_dict: DatasetDict, inser
 
 
 class ReplayBuffer(Dataset):
+
     def __init__(
         self,
         observation_space: gym.Space,
@@ -57,7 +56,7 @@ class ReplayBuffer(Dataset):
         observation_data = _init_replay_dict(observation_space, capacity, self.device)
         next_observation_data = _init_replay_dict(next_observation_space, capacity, self.device)
 
-        # Initialize dataset dictionary with torch tensors
+        # Initialize core dataset structure
         dataset_dict = {
             "observations": observation_data,
             "next_observations": next_observation_data,
@@ -67,15 +66,16 @@ class ReplayBuffer(Dataset):
             "dones": torch.empty((capacity,), dtype=torch.bool, device=self.device),
         }
 
+        # Add optional next actions data
         if include_next_actions:
-            dataset_dict["next_actions"] = torch.empty(
-                (capacity, *action_space.shape), dtype=torch.float32, device=self.device
-            )
+            dataset_dict["next_actions"] = torch.empty((capacity, *action_space.shape), dtype=torch.float32, device=self.device)
             dataset_dict["next_intvn"] = torch.empty((capacity,), dtype=torch.bool, device=self.device)
 
+        # Add optional label data
         if include_label:
             dataset_dict["labels"] = torch.empty((capacity,), dtype=torch.long, device=self.device)
 
+        # Add optional grasp penalty data
         if include_grasp_penalty:
             dataset_dict["grasp_penalty"] = torch.empty((capacity,), dtype=torch.float32, device=self.device)
 
@@ -89,21 +89,18 @@ class ReplayBuffer(Dataset):
         return self._size
 
     def insert(self, data_dict: DatasetDict):
-        """Insert data into replay buffer"""
-        # Convert numpy arrays to torch tensors if needed
+        # Convert numpy arrays to torch tensors and insert into buffer
         if isinstance(data_dict, dict):
-            data_dict = {
-                k: (torch.from_numpy(v).to(self.device) if isinstance(v, np.ndarray) else v)
-                for k, v in data_dict.items()
-            }
+            data_dict = {k: (torch.from_numpy(v).to(self.device) if isinstance(v, np.ndarray) else v) for k, v in data_dict.items()}
 
         _insert_recursively(self.dataset_dict, data_dict, self._insert_index)
 
+        # Update buffer state
         self._insert_index = (self._insert_index + 1) % self._capacity
         self._size = min(self._size + 1, self._capacity)
 
     def get_iterator(self, queue_size: int = 2, sample_args: dict = {}, device=None):
-        """Get iterator over batches with optional device transfer"""
+        # Create iterator with pre-filled queue for batched sampling
         if device is None:
             device = self.device
 
@@ -112,7 +109,7 @@ class ReplayBuffer(Dataset):
         def enqueue(n):
             for _ in range(n):
                 data = self.sample(**sample_args)
-                # Move batch to specified device
+                # Move batch to target device
                 if isinstance(data, dict):
                     data = {k: (v.to(device) if isinstance(v, torch.Tensor) else v) for k, v in data.items()}
                 queue.append(data)
@@ -123,13 +120,13 @@ class ReplayBuffer(Dataset):
             enqueue(1)
 
     def download(self, from_idx: int, to_idx: int):
-        """Download a range of data from the buffer"""
+        # Retrieve continuous range of data from buffer
         indices = torch.arange(from_idx, to_idx, device=self.device)
         data_dict = self.sample(batch_size=len(indices), indx=indices)
         return to_idx, data_dict
 
     def get_download_iterator(self):
-        """Iterator for downloading all data from buffer"""
+        # Iterate through entire buffer content in batches
         last_idx = 0
         while True:
             if last_idx >= self._size:

@@ -1,6 +1,3 @@
 from .sac import SACAgent
 
-
-agents = {
-    "sac": SACAgent
-}
+agents = {"sac": SACAgent}

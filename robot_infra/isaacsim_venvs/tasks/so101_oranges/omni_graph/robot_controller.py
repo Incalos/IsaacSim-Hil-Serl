@@ -1,23 +1,17 @@
-"""OmniGraph robot controller for the SO101 pick-oranges environment."""
-
 import builtins
 from pathlib import Path
-from tkinter import N
-
 from curobo.types.base import TensorDeviceType
 from curobo.types.math import Pose
 from curobo.types.robot import RobotConfig
 from curobo.wrap.reacher.ik_solver import IKSolver, IKSolverConfig
 from isaacsim.core.prims import Articulation
 import torch
-
 import omni.graph.core as og
 import omni.kit.app
 import usdrt.Sdf
-
 from .. import SO101_FOLLOWER_ASSET_PATH
 
-# Global variables injected into builtins for script node access.
+# Global variables for script node access
 builtins._GLOBAL_IK_SOLVER = None
 builtins._GLOBAL_TENSOR_ARGS = None
 builtins._GLOBAL_GRAPH_PATH = None
@@ -35,7 +29,7 @@ class SO101_OmniGraph_Controller:
         self.ros2_namespace = ros2_namespace
         self.graph_path = "/RobotControlGraph"
 
-        # USD prim paths for robot, cameras, and end-effector.
+        # Define USD prim paths for robot components
         self.robot_path = usdrt.Sdf.Path("/World/envs/env_0/Robot")
         self.wrist_camera_path = usdrt.Sdf.Path("/World/envs/env_0/Robot/gripper/wrist_camera")
         self.front_camera_path = usdrt.Sdf.Path("/World/envs/env_0/Robot/base/front_camera")
@@ -48,14 +42,14 @@ class SO101_OmniGraph_Controller:
         self._init_global_variables()
 
     def _enable_extensions(self):
-        """Enable required Isaac Sim extensions."""
+        # Enable required Isaac Sim extensions
         ext_manager = omni.kit.app.get_app().get_extension_manager()
         for ext in ["isaacsim.ros2.bridge", "isaacsim.core.nodes"]:
             if not ext_manager.is_extension_enabled(ext):
                 ext_manager.set_extension_enabled_immediate(ext, True)
 
     def _init_global_variables(self):
-        """Initialize cuRobo IK solver and expose globals for script nodes."""
+        # Initialize global variables for script node access
         builtins._GLOBAL_GRAPH_PATH = self.graph_path
         builtins._GLOBAL_ROBOT_ASSET = self.env.unwrapped.scene["robot"]
         builtins._GLOBAL_ROBOT_PRIM = Articulation(prim_paths_expr="/World/envs/env_0/Robot")
@@ -63,7 +57,7 @@ class SO101_OmniGraph_Controller:
 
         tensor_args = TensorDeviceType()
 
-        # Configure robot kinematics from USD.
+        # Configure robot kinematics from USD file
         robot_cfg_dict = {
             "kinematics": {
                 "usd_path": SO101_FOLLOWER_ASSET_PATH,
@@ -83,7 +77,7 @@ class SO101_OmniGraph_Controller:
         )
         ik_solver = IKSolver(ik_config)
 
-        # Warm up IK solver to initialize CUDA kernels.
+        # Warm up IK solver to initialize CUDA kernels
         print("[INFO]: Warming up cuRobo IK Solver (this may take a few seconds)...")
         dummy_pose = Pose(
             position=torch.tensor([[0.3, 0.0, 0.3]], device=tensor_args.device),
@@ -103,11 +97,11 @@ class SO101_OmniGraph_Controller:
         self._setup_robot_state_script_node()
 
     def _setup_eef_ik_script_node(self):
-        """Create output attributes and connections for end-effector IK script node."""
+        # Create output attributes for end-effector IK script node
         script_node_path = f"{self.graph_path}/eef_ik_script"
         script_node = og.Controller.node(script_node_path)
 
-        # Create output attributes for joint commands.
+        # Create output attributes for joint commands
         og.Controller.create_attribute(
             script_node,
             "joint_names",
@@ -133,7 +127,7 @@ class SO101_OmniGraph_Controller:
             attr_port=og.AttributePortType.ATTRIBUTE_PORT_TYPE_OUTPUT,
         )
 
-        # Connect: subscriber -> script node -> articulation controller.
+        # Define node connections: subscriber -> script node -> articulation controller
         connections = [
             (f"{self.graph_path}/eef_cmd_sub.outputs:execOut", f"{self.graph_path}/eef_ik_script.inputs:execIn"),
             (
@@ -154,15 +148,17 @@ class SO101_OmniGraph_Controller:
             ),
             (f"{self.graph_path}/eef_ik_script.outputs:execOut", f"{self.graph_path}/eef_art_controller.inputs:execIn"),
         ]
+
+        # Establish node connections
         for src, dst in connections:
             og.Controller.connect(src, dst)
 
     def _setup_robot_state_script_node(self):
-        """Create output attributes and connections for robot state script node."""
+        # Create output attributes for robot state script node
         script_node_path = f"{self.graph_path}/robot_state_script"
         script_node = og.Controller.node(script_node_path)
 
-        # Create output attributes for joint forces, torques, and end-effector state.
+        # Create output attributes for robot state data
         og.Controller.create_attribute(
             script_node,
             "measuredJointForces",
@@ -194,7 +190,7 @@ class SO101_OmniGraph_Controller:
             attr_port=og.AttributePortType.ATTRIBUTE_PORT_TYPE_OUTPUT,
         )
 
-        # Connect script node outputs to ROS2 publishers.
+        # Define connections: script node outputs to ROS2 publishers
         connections = [
             (
                 f"{self.graph_path}/robot_state_script.outputs:measuredJointForces",
@@ -234,11 +230,13 @@ class SO101_OmniGraph_Controller:
                 f"{self.graph_path}/eef_jacobian_pub.inputs:execIn",
             ),
         ]
+
+        # Establish node connections
         for src, dst in connections:
             og.Controller.connect(src, dst)
 
     def _setup_robot_graph(self):
-        """Create OmniGraph with ROS2 publishers, subscribers, and articulation controllers."""
+        # Create OmniGraph with ROS2 publishers, subscribers and articulation controllers
         keys = og.Controller.Keys
         og.Controller.edit(
             {
@@ -248,48 +246,48 @@ class SO101_OmniGraph_Controller:
             },
             {
                 keys.CREATE_NODES: [
-                    # Core timing and context.
+                    # Core timing and context nodes
                     ("on_tick", "omni.graph.action.OnPlaybackTick"),
                     ("ros2_context", "isaacsim.ros2.bridge.ROS2Context"),
                     ("read_simulation_time", "isaacsim.core.nodes.IsaacReadSimulationTime"),
-                    # Cameras.
+                    # Camera nodes
                     ("wrist_render_product", "isaacsim.core.nodes.IsaacCreateRenderProduct"),
                     ("wrist_camera_helper", "isaacsim.ros2.bridge.ROS2CameraHelper"),
                     ("front_render_product", "isaacsim.core.nodes.IsaacCreateRenderProduct"),
                     ("front_camera_helper", "isaacsim.ros2.bridge.ROS2CameraHelper"),
                     ("side_render_product", "isaacsim.core.nodes.IsaacCreateRenderProduct"),
                     ("side_camera_helper", "isaacsim.ros2.bridge.ROS2CameraHelper"),
-                    # Joint control.
+                    # Joint control nodes
                     ("joint_cmd_sub", "isaacsim.ros2.bridge.ROS2SubscribeJointState"),
                     ("joint_art_controller", "isaacsim.core.nodes.IsaacArticulationController"),
-                    # End-effector control.
+                    # End-effector control nodes
                     ("eef_cmd_sub", "isaacsim.ros2.bridge.ROS2Subscriber"),
                     ("eef_ik_script", "omni.graph.scriptnode.ScriptNode"),
                     ("eef_art_controller", "isaacsim.core.nodes.IsaacArticulationController"),
-                    # Joint state publishers.
+                    # Joint state publishers
                     ("joint_state_pub", "isaacsim.ros2.bridge.ROS2PublishJointState"),
                     ("joint_force_pub", "isaacsim.ros2.bridge.ROS2Publisher"),
                     ("joint_torque_pub", "isaacsim.ros2.bridge.ROS2Publisher"),
-                    # End-effector state publishers.
+                    # End-effector state publishers
                     ("eef_pose_pub", "isaacsim.ros2.bridge.ROS2PublishTransformTree"),
                     ("eef_wrench_pub", "isaacsim.ros2.bridge.ROS2Publisher"),
                     ("eef_vel_pub", "isaacsim.ros2.bridge.ROS2Publisher"),
                     ("eef_jacobian_pub", "isaacsim.ros2.bridge.ROS2Publisher"),
-                    # Robot state script node.
+                    # Robot state script node
                     ("robot_state_script", "omni.graph.scriptnode.ScriptNode"),
-                    # Isaac Sim clock publisher.
+                    # Isaac Sim clock publisher
                     ("isaacsim_clock", "isaacsim.ros2.bridge.ROS2PublishClock"),
-                    # Isaac Sim reset control.
+                    # Isaac Sim reset control
                     ("isaacsim_reset_sub", "isaacsim.ros2.bridge.ROS2Subscriber"),
                     ("isaacsim_reset_script", "omni.graph.scriptnode.ScriptNode"),
                 ],
                 keys.SET_VALUES: [
-                    # Isaac Sim clock publisher.
+                    # Isaac Sim clock publisher configuration
                     ("isaacsim_clock.inputs:topicName", "/clock"),
-                    # Robot state script node.
+                    # Robot state script node configuration
                     ("robot_state_script.inputs:scriptPath", str(Path(__file__).parent / "get_state_script_node.py")),
                     ("robot_state_script.inputs:usePath", True),
-                    # Wrist camera.
+                    # Wrist camera configuration
                     ("wrist_render_product.inputs:cameraPrim", self.wrist_camera_path),
                     ("wrist_render_product.inputs:height", 480),
                     ("wrist_render_product.inputs:width", 640),
@@ -298,7 +296,7 @@ class SO101_OmniGraph_Controller:
                     ("wrist_camera_helper.inputs:nodeNamespace", self.ros2_namespace),
                     ("wrist_camera_helper.inputs:queueSize", 10),
                     ("wrist_camera_helper.inputs:type", "rgb"),
-                    # Front camera.
+                    # Front camera configuration
                     ("front_render_product.inputs:cameraPrim", self.front_camera_path),
                     ("front_render_product.inputs:height", 480),
                     ("front_render_product.inputs:width", 640),
@@ -307,7 +305,7 @@ class SO101_OmniGraph_Controller:
                     ("front_camera_helper.inputs:nodeNamespace", self.ros2_namespace),
                     ("front_camera_helper.inputs:queueSize", 10),
                     ("front_camera_helper.inputs:type", "rgb"),
-                    # Side camera.
+                    # Side camera configuration
                     ("side_render_product.inputs:cameraPrim", self.side_camera_path),
                     ("side_render_product.inputs:height", 480),
                     ("side_render_product.inputs:width", 640),
@@ -316,7 +314,7 @@ class SO101_OmniGraph_Controller:
                     ("side_camera_helper.inputs:nodeNamespace", self.ros2_namespace),
                     ("side_camera_helper.inputs:queueSize", 10),
                     ("side_camera_helper.inputs:type", "rgb"),
-                    # End-effector state publishers.
+                    # End-effector state publishers configuration
                     ("eef_pose_pub.inputs:topicName", "eef_poses"),
                     ("eef_pose_pub.inputs:nodeNamespace", self.ros2_namespace),
                     ("eef_pose_pub.inputs:queueSize", 10),
@@ -340,7 +338,7 @@ class SO101_OmniGraph_Controller:
                     ("eef_jacobian_pub.inputs:messagePackage", "std_msgs"),
                     ("eef_jacobian_pub.inputs:messageSubfolder", "msg"),
                     ("eef_jacobian_pub.inputs:messageName", "Float32MultiArray"),
-                    # End-effector command subscriber.
+                    # End-effector command subscriber configuration
                     ("eef_cmd_sub.inputs:topicName", "eef_commands"),
                     ("eef_cmd_sub.inputs:nodeNamespace", self.ros2_namespace),
                     ("eef_cmd_sub.inputs:queueSize", 10),
@@ -350,7 +348,7 @@ class SO101_OmniGraph_Controller:
                     ("eef_art_controller.inputs:targetPrim", self.robot_path),
                     ("eef_ik_script.inputs:scriptPath", str(Path(__file__).parent / "get_eef_ik_script_node.py")),
                     ("eef_ik_script.inputs:usePath", True),
-                    # Joint state publishers.
+                    # Joint state publishers configuration
                     ("joint_state_pub.inputs:topicName", "joint_states"),
                     ("joint_state_pub.inputs:nodeNamespace", self.ros2_namespace),
                     ("joint_state_pub.inputs:targetPrim", self.robot_path),
@@ -367,12 +365,12 @@ class SO101_OmniGraph_Controller:
                     ("joint_torque_pub.inputs:messagePackage", "std_msgs"),
                     ("joint_torque_pub.inputs:messageSubfolder", "msg"),
                     ("joint_torque_pub.inputs:messageName", "Float32MultiArray"),
-                    # Joint command subscriber.
+                    # Joint command subscriber configuration
                     ("joint_cmd_sub.inputs:topicName", "joint_commands"),
                     ("joint_cmd_sub.inputs:nodeNamespace", self.ros2_namespace),
                     ("joint_cmd_sub.inputs:queueSize", 10),
                     ("joint_art_controller.inputs:targetPrim", self.robot_path),
-                    # IsaacSim reset subscriber.
+                    # IsaacSim reset subscriber configuration
                     ("isaacsim_reset_sub.inputs:topicName", "isaacsim_reset"),
                     ("isaacsim_reset_sub.inputs:nodeNamespace", self.ros2_namespace),
                     ("isaacsim_reset_sub.inputs:queueSize", 10),
@@ -383,7 +381,7 @@ class SO101_OmniGraph_Controller:
                     ("isaacsim_reset_script.inputs:usePath", True),
                 ],
                 keys.CONNECT: [
-                    # Playback tick triggers all nodes.
+                    # Connect playback tick to all nodes
                     ("on_tick.outputs:tick", "joint_cmd_sub.inputs:execIn"),
                     ("on_tick.outputs:tick", "joint_state_pub.inputs:execIn"),
                     ("on_tick.outputs:tick", "eef_cmd_sub.inputs:execIn"),
@@ -395,7 +393,7 @@ class SO101_OmniGraph_Controller:
                     ("on_tick.outputs:tick", "isaacsim_clock.inputs:execIn"),
                     ("on_tick.outputs:tick", "isaacsim_reset_sub.inputs:execIn"),
                     ("on_tick.outputs:tick", "isaacsim_reset_script.inputs:execIn"),
-                    # ROS2 context to all ROS2 nodes.
+                    # Connect ROS2 context to all ROS2 nodes
                     ("ros2_context.outputs:context", "wrist_camera_helper.inputs:context"),
                     ("ros2_context.outputs:context", "front_camera_helper.inputs:context"),
                     ("ros2_context.outputs:context", "side_camera_helper.inputs:context"),
@@ -410,18 +408,18 @@ class SO101_OmniGraph_Controller:
                     ("ros2_context.outputs:context", "joint_torque_pub.inputs:context"),
                     ("ros2_context.outputs:context", "isaacsim_clock.inputs:context"),
                     ("ros2_context.outputs:context", "isaacsim_reset_sub.inputs:context"),
-                    # Simulation time to publishers.
+                    # Connect simulation time to publishers
                     ("read_simulation_time.outputs:simulationTime", "joint_state_pub.inputs:timeStamp"),
                     ("read_simulation_time.outputs:simulationTime", "eef_pose_pub.inputs:timeStamp"),
                     ("read_simulation_time.outputs:simulationTime", "isaacsim_clock.inputs:timeStamp"),
-                    # Camera render products to helpers.
+                    # Connect camera render products to helpers
                     ("wrist_render_product.outputs:execOut", "wrist_camera_helper.inputs:execIn"),
                     ("wrist_render_product.outputs:renderProductPath", "wrist_camera_helper.inputs:renderProductPath"),
                     ("front_render_product.outputs:execOut", "front_camera_helper.inputs:execIn"),
                     ("front_render_product.outputs:renderProductPath", "front_camera_helper.inputs:renderProductPath"),
                     ("side_render_product.outputs:execOut", "side_camera_helper.inputs:execIn"),
                     ("side_render_product.outputs:renderProductPath", "side_camera_helper.inputs:renderProductPath"),
-                    # Joint command subscriber to controller.
+                    # Connect joint command subscriber to controller
                     ("joint_cmd_sub.outputs:jointNames", "joint_art_controller.inputs:jointNames"),
                     ("joint_cmd_sub.outputs:positionCommand", "joint_art_controller.inputs:positionCommand"),
                     ("joint_cmd_sub.outputs:velocityCommand", "joint_art_controller.inputs:velocityCommand"),

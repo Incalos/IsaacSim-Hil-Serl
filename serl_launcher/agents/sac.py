@@ -290,7 +290,7 @@ class SACAgent:
             encoder_type=encoder_type,
             image_keys=image_keys,
             image_size=image_size,
-            pooling_method="spatial_learned_embeddings",
+            pooling_method="avg",
             num_spatial_blocks=8,
             bottleneck_dim=256,
         )
@@ -315,7 +315,7 @@ class SACAgent:
                 hidden_dims=policy_hidden_dims,
                 activate_final=True,
                 use_layer_norm=policy_network_kwargs.get("use_layer_norm", False),
-                activations=policy_network_kwargs.get("activation", nn.Tanh()),
+                activations=policy_network_kwargs.get("activation", nn.SiLU()),
             ),
             action_dim=action_dim,
             **policy_kwargs,
@@ -329,7 +329,7 @@ class SACAgent:
                     hidden_dims=critic_hidden_dims,
                     activate_final=True,
                     use_layer_norm=critic_network_kwargs.get("use_layer_norm", False),
-                    activations=critic_network_kwargs.get("activation", nn.Tanh()),
+                    activations=critic_network_kwargs.get("activation", nn.SiLU()),
                 )) for _ in range(critic_ensemble_size)
         ]
         critic = CriticEnsemble(critics)

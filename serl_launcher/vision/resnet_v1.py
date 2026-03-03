@@ -41,52 +41,17 @@ def _make_resnet_backbone(model_name: str, pretrained: bool) -> nn.Module:
     return _ResNetBackbone(resnet)
 
 
-class SpatialLearnedEmbeddings(nn.Module):
-
-    def __init__(self, height: int, width: int, channel: int, num_features: int):
-        super().__init__()
-        self.height = height
-        self.width = width
-        self.channel = channel
-        self.num_features = num_features
-
-        # Initialize learnable kernel parameters
-        self.kernel = nn.Parameter(torch.empty(height, width, channel, num_features))
-        fan_in = float(height * width * channel)
-        std = 1.0 / torch.sqrt(torch.tensor(fan_in))
-        nn.init.normal_(self.kernel, mean=0.0, std=std)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        # Handle input without batch dimension
-        no_batch_dim = len(x.shape) < 4
-        if no_batch_dim:
-            x = x.unsqueeze(0)
-
-        batch_size = x.shape[0]
-        # Element-wise multiplication and spatial summation
-        x = x.unsqueeze(-1) * self.kernel.unsqueeze(0)
-        x = x.sum(dim=(1, 2))
-        x = x.reshape(batch_size, -1)
-
-        # Remove batch dimension if original input didn't have it
-        if no_batch_dim:
-            x = x.squeeze(0)
-
-        return x
-
-
 class PreTrainedResNetEncoder(nn.Module):
 
     def __init__(
             self,
             model_name: str = "resnet18",
-            pooling_method: str = "spatial_learned_embeddings",
+            pooling_method: str = "avg",
             num_spatial_blocks: int = 8,
             bottleneck_dim: Optional[int] = 256,
             freeze_backbone: bool = True,
             pretrained: bool = True,
             image_size: Tuple[int, int] = (128, 128),
-            dropout_rate: float = 0.1,
             shared_backbone: Optional[nn.Module] = None,
     ):
         super().__init__()
@@ -116,16 +81,7 @@ class PreTrainedResNetEncoder(nn.Module):
             self.feature_width = dummy_output.shape[3]
 
         # Initialize pooling layer based on selected method
-        if pooling_method == "spatial_learned_embeddings":
-            self.pooling = SpatialLearnedEmbeddings(
-                height=self.feature_height,
-                width=self.feature_width,
-                channel=self.feature_channels,
-                num_features=num_spatial_blocks,
-            )
-            self.dropout = nn.Dropout(dropout_rate)
-            pooled_dim = self.feature_channels * num_spatial_blocks
-        elif pooling_method == "avg":
+        if pooling_method == "avg":
             self.pooling = None
             self.dropout = None
             pooled_dim = self.feature_channels
@@ -141,7 +97,7 @@ class PreTrainedResNetEncoder(nn.Module):
             self.bottleneck = nn.Sequential(
                 nn.Linear(pooled_dim, bottleneck_dim),
                 nn.LayerNorm(bottleneck_dim),
-                nn.Tanh(),
+                nn.SiLU(),
             )
             nn.init.xavier_uniform_(self.bottleneck[0].weight)
             nn.init.zeros_(self.bottleneck[0].bias)
@@ -174,10 +130,7 @@ class PreTrainedResNetEncoder(nn.Module):
         x = x.permute(0, 2, 3, 1)
 
         # Apply selected pooling method
-        if self.pooling_method == "spatial_learned_embeddings":
-            x = self.pooling(x)
-            x = self.dropout(x)
-        elif self.pooling_method == "avg":
+        if self.pooling_method == "avg":
             x = x.mean(dim=(1, 2))  # Output shape: [B, C]
         elif self.pooling_method == "max":
             x = x.amax(dim=(1, 2))  # Output shape: [B, C]
@@ -209,7 +162,7 @@ def create_encoder(
     if encoder_type == "resnet18-pretrained":
         model_name = "resnet18"
         pretrained = True
-        freeze_backbone = False
+        freeze_backbone = True
     elif encoder_type == "resnet18":
         model_name = "resnet18"
         pretrained = False
@@ -217,7 +170,7 @@ def create_encoder(
     elif encoder_type == "resnet34-pretrained":
         model_name = "resnet34"
         pretrained = True
-        freeze_backbone = False
+        freeze_backbone = True
     elif encoder_type == "resnet34":
         model_name = "resnet34"
         pretrained = False
@@ -225,7 +178,7 @@ def create_encoder(
     elif encoder_type == "resnet50-pretrained":
         model_name = "resnet50"
         pretrained = True
-        freeze_backbone = False
+        freeze_backbone = True
     elif encoder_type == "resnet50":
         model_name = "resnet50"
         pretrained = False

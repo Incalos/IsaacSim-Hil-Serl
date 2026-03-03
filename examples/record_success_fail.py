@@ -49,7 +49,7 @@ def main(_):
     # Validate experiment configuration
     assert FLAGS.exp_name in CONFIG_MAPPING, "Experiment folder not found."
     config = CONFIG_MAPPING[FLAGS.exp_name]()
-    env = config.get_environment(fake_env=False, save_video=False, classifier=False)
+    env = config.get_environment(fake_env=False, classifier=False)
 
     # Set up save directory
     base_dir = os.path.dirname(os.path.abspath(__file__))

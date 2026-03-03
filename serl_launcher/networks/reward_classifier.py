@@ -63,7 +63,7 @@ def create_classifier(
         image_key:
             PreTrainedResNetEncoder(
                 model_name="resnet18",
-                pooling_method="spatial_learned_embeddings",
+                pooling_method="avg",
                 num_spatial_blocks=8,
                 bottleneck_dim=256,
                 freeze_backbone=True,

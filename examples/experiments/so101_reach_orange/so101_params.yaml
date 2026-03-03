@@ -1,3 +1,4 @@
+urdf_path: isaacsim_venvs/assets/robots/so101_follower.urdf
 joint_names:
 - shoulder_pan
 - shoulder_lift

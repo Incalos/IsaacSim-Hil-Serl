@@ -36,12 +36,12 @@ def make_sac_pixel_agent(
             "std_max": 2,
         },
         critic_network_kwargs={
-            "activation": nn.ReLU(),
+            "activation": nn.SiLU(),
             "use_layer_norm": True,
             "hidden_dims": [256, 512, 512, 256, 32],
         },
         policy_network_kwargs={
-            "activation": nn.ReLU(),
+            "activation": nn.SiLU(),
             "use_layer_norm": True,
             "hidden_dims": [256, 512, 512, 256, 32],
         },

@@ -22,7 +22,6 @@ class EnvConfig(DefaultEnvConfig):
         "wrist_camera": lambda img: img,
         "side_camera": lambda img: img[:250, :470, :],
     }
-    RANDOM_RESET = False
     ACTION_SCALE = (0.015, 0.1, 1)
     MAX_EPISODE_LENGTH = 100
 
@@ -51,12 +50,11 @@ class TrainConfig(DefaultTrainingConfig):
     demo_path = os.path.join(os.path.dirname(__file__), "demo_data")
 
     # Create and configure environment instance
-    def get_environment(self, fake_env=False, save_video=False, classifier=True):
+    def get_environment(self, fake_env=False, classifier=True):
         # Initialize base SO101 environment
         env = SO101Env(fake_env=fake_env, config=EnvConfig(), image_size=self.image_size)
         # Add gamepad intervention capability
         env = GamepadIntervention(env, guid="0300509d5e040000120b000009050000")
-
         # Apply SERL observation formatting wrapper
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)
         # Add temporal chunking to observations
@@ -71,16 +69,27 @@ class TrainConfig(DefaultTrainingConfig):
                 img_size=self.image_size,
             )
 
-            # Sigmoid activation function for probability calculation
-            sigmoid = lambda x: 1 / (1 + np.exp(-x))
-
             # Reward calculation function
             def reward_func(obs):
-                prob = sigmoid(classifier_model(obs))
-                reward = prob * 2.0
-                is_grasped = prob > 0.75 and obs["state"][0][5] < 0.7
-                if is_grasped:
-                    reward += 5
+
+                def sigmoid(x):
+                    # Sigmoid activation function for probability calculation
+                    x = np.clip(x, -10, 10)
+                    return 1 / (1 + np.exp(-x))
+
+                logits = classifier_model(obs)
+                if np.isnan(logits):
+                    logits = -10
+                prob = sigmoid(logits)
+
+                gripper_closed = obs["state"][0][5] < 0.7
+                if gripper_closed:
+                    reward = prob
+                else:
+                    reward = 0.5 * prob
+
+                is_grasped = (prob > 0.75) and gripper_closed
+
                 return reward, is_grasped
 
             # Wrap environment with reward classifier

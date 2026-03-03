@@ -229,6 +229,8 @@ class PickOrangesEnvCfg(ManagerBasedRLEnvCfg):
         # PhysX simulation parameters
         self.sim.physx.bounce_threshold_velocity = 0.01
         self.sim.physx.friction_correlation_distance = 0.00625
+        self.sim.physx.friction_offset = 0.04
+        self.sim.physx.contact_offset = 0.02
         self.sim.render.enable_translucency = True
 
         # Frame transformer visualization scale
@@ -257,8 +259,8 @@ class PickOrangesEnvCfg(ManagerBasedRLEnvCfg):
                     "z": (0.0, 0.0)
                 }),
                 randomize_object_uniform("Plate", pose_range={
-                    "x": (0.0, 0.0),
-                    "y": (0.0, 0.0),
+                    "x": (-0.02, -0.02),
+                    "y": (-0.01, -0.01),
                     "z": (0.0, 0.0)
                 }),
             ],

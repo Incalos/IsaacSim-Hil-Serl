@@ -5,24 +5,28 @@ from isaaclab.assets import AssetBaseCfg
 from isaaclab.assets.articulation import ArticulationCfg
 import isaaclab.sim as sim_utils
 
-# Define root paths for scene and robot assets
+# Define root directories for scene and robot assets
 SCENES_ROOT = Path(__file__).parent.parent.parent / "assets" / "scenes"
 ROBOTS_ROOT = Path(__file__).parent.parent.parent / "assets" / "robots"
 
-# Configure kitchen scene with orange asset
+# Configure kitchen scene asset with orange
 KITCHEN_WITH_ORANGE_USD_PATH = str(SCENES_ROOT / "kitchen_with_orange" / "scene.usd")
 KITCHEN_WITH_ORANGE_CFG = AssetBaseCfg(spawn=sim_utils.UsdFileCfg(usd_path=KITCHEN_WITH_ORANGE_USD_PATH))
 
-# Configure SO101 follower robot articulation
+# Configure SO101 follower robot articulation parameters
 SO101_FOLLOWER_ASSET_PATH = str(ROBOTS_ROOT / "so101_follower.usd")
 SO101_FOLLOWER_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=str(SO101_FOLLOWER_ASSET_PATH),
-        rigid_props=sim_utils.RigidBodyPropertiesCfg(disable_gravity=True),
+        usd_path=SO101_FOLLOWER_ASSET_PATH,
+        rigid_props=sim_utils.RigidBodyPropertiesCfg(
+            disable_gravity=False,
+            solver_position_iteration_count=128,
+            solver_velocity_iteration_count=128,
+        ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
-            solver_position_iteration_count=400,
-            solver_velocity_iteration_count=40,
+            solver_position_iteration_count=1024,
+            solver_velocity_iteration_count=1024,
             fix_root_link=True,
         ),
     ),
@@ -39,7 +43,7 @@ SO101_FOLLOWER_CFG = ArticulationCfg(
         },
     ),
     actuators={
-        "joints":
+        "arm_joints":
             ImplicitActuatorCfg(
                 joint_names_expr=[
                     "shoulder_pan",
@@ -47,13 +51,24 @@ SO101_FOLLOWER_CFG = ArticulationCfg(
                     "elbow_flex",
                     "wrist_flex",
                     "wrist_roll",
-                    "gripper",
                 ],
-                effort_limit_sim=10,
-                velocity_limit_sim=10,
-                stiffness=17.8,
-                damping=0.6,
-            )
+                effort_limit_sim=2000.0,
+                velocity_limit_sim=15.0,
+                stiffness=4500.0,
+                damping=500.0,
+                friction=13.0,
+                armature=1.0,
+            ),
+        "gripper":
+            ImplicitActuatorCfg(
+                joint_names_expr=["gripper"],
+                effort_limit_sim=40,
+                velocity_limit_sim=1.2,
+                stiffness=200,
+                damping=50,
+                friction=3.0,
+                armature=0.3,
+            ),
     },
     soft_joint_pos_limit_factor=1.0,
 )

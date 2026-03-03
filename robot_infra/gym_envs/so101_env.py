@@ -1,15 +1,13 @@
 import copy
 import sys
-from pathlib import Path
 import struct
 import time
 import yaml
-from typing import Dict, Sequence
+from typing import Dict
 import cv2
 import gymnasium as gym
 import numpy as np
 import requests
-from pytransform3d.urdf import UrdfTransformManager
 from scipy.spatial.transform import Rotation
 
 try:
@@ -42,11 +40,7 @@ except ImportError:
 
 class DefaultEnvConfig:
     SERVER_URL: str = "http://127.0.0.1:5000"
-    URDF_PATH: str = "isaacsim_venvs/assets/robots/so101_follower.urdf"
     CAMERA_NAMES: list[str] = ["wrist_camera", "front_camera", "side_camera"]
-    RANDOM_RESET = True
-    RANDOM_XY_RANGE = 0.02
-    RANDOM_RZ_RANGE = 0.05
     MAX_EPISODE_LENGTH: int = 200
     IMAGE_CROP: dict[str, callable]
     ACTION_SCALE: tuple[float]
@@ -61,15 +55,12 @@ class SO101Env(gym.Env):
         self.config = config
         self.url = config.SERVER_URL
         self.action_scale = config.ACTION_SCALE
-        self.randomreset = config.RANDOM_RESET
-        self.random_xy_range = config.RANDOM_XY_RANGE
-        self.random_rz_range = config.RANDOM_RZ_RANGE
         self.max_episode_length = config.MAX_EPISODE_LENGTH
         self.camera_names = config.CAMERA_NAMES
         self.xyz_bounding_box = self.rpy_bounding_box = None
 
         # Define normalized action space (7 DOF: 6 for EEF, 1 for gripper)
-        self.action_space = gym.spaces.Box(np.ones((7,), dtype=np.float32) * -1, np.ones((7,), dtype=np.float32))
+        self.action_space = self.action_space = gym.spaces.Box(low=np.full(7, -1.0, dtype=np.float32), high=np.full(7, 1.0, dtype=np.float32), dtype=np.float32)
 
         # Define multi-modal observation space (state + multi-camera images)
         self.observation_space = gym.spaces.Dict({
@@ -86,8 +77,7 @@ class SO101Env(gym.Env):
                 gym.spaces.Dict({key: gym.spaces.Box(0, 255, shape=(image_size[0], image_size[1], 3), dtype=np.uint8) for key in self.camera_names}),
         })
 
-        # Load robot kinematics and configuration files
-        self._load_urdf(config.URDF_PATH)
+        # Load configuration files
         self._load_yaml_config(config.ROBOT_CONFIG)
 
         # Skip real env initialization if fake_env flag is set
@@ -119,17 +109,6 @@ class SO101Env(gym.Env):
         self.curr_eef_torques = np.array(ps["eef_torques"])
         self.curr_eef_velocities = np.array(ps["eef_velocities"])
 
-    def _load_urdf(self, path):
-        # Load URDF file for forward kinematics calculation
-        urdf_path = Path(path)
-        if not urdf_path.is_absolute():
-            _root = Path(__file__).resolve().parent.parent
-            urdf_path = _root / urdf_path
-        self.tm = UrdfTransformManager()
-        with open(urdf_path, "r") as f:
-            urdf_text = f.read()
-        self.tm.load_urdf(urdf_text)
-
     def _load_yaml_config(self, path):
         # Load robot configuration from YAML file (joint limits, bounding box, reset pose)
         with open(path, "r") as f:
@@ -158,20 +137,7 @@ class SO101Env(gym.Env):
             self.wrist_flex_limits = params["joint_limits"]["wrist_flex"]
             self.wrist_roll_limits = params["joint_limits"]["wrist_roll"]
             self.gripper_limits = params["joint_limits"]["gripper"]
-
-    def joints_to_eef_fk(self, joint_positions: Sequence[float]) -> np.ndarray:
-        # Compute forward kinematics: joint positions -> EEF pose (position + quaternion + gripper state)
-        gripper_position = joint_positions[-1]
-        for name, pos in zip(self.joint_names, joint_positions[:-1]):
-            self.tm.set_joint(name, pos)
-        T = self.tm.get_transform("so101_new_calib_gripper", "so101_new_calib")
-        position = T[:3, 3]
-        quat_xyzw = Rotation.from_matrix(T[:3, :3]).as_quat()
-
-        # Ensure quaternion w component is positive for consistency
-        if quat_xyzw[3] < 0:
-            quat_xyzw = -quat_xyzw
-        return np.concatenate([position, quat_xyzw, [gripper_position]])
+            self.urdf_path = params["urdf_path"]
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
         # Enforce Cartesian position and rotation limits for hardware safety
@@ -211,7 +177,8 @@ class SO101Env(gym.Env):
                     # Process image: crop -> resize -> BGR to RGB conversion
                     if rgb is not None:
                         cropped = self.config.IMAGE_CROP[name](rgb) if name in self.config.IMAGE_CROP else rgb
-                        images[name] = cv2.resize(cropped, self.observation_space["images"][name].shape[:2][::-1])
+                        resized = cv2.resize(cropped, self.observation_space["images"][name].shape[:2][::-1])
+                        images[name] = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
                 return images
         except Exception as e:
             print(f"Error fetching cameras: {e}")
@@ -283,19 +250,9 @@ class SO101Env(gym.Env):
         return False
 
     def go_to_reset(self):
-        # Reset robot to initial pose (with optional domain randomization)
+        # Reset robot to initial pose
         self._update_currpos()
-        if self.randomreset:
-            reset_pose = self.joints_to_eef_fk(self.reset_pose.copy())
-            # Add random XY offset
-            reset_pose[:2] += np.random.uniform(-self.random_xy_range, self.random_xy_range, (2,))
-            # Add random Z rotation offset
-            euler_random = Rotation.from_quat(reset_pose[3:7]).as_euler("xyz")
-            euler_random[-1] += np.random.uniform(-self.random_rz_range, self.random_rz_range)
-            reset_pose[3:7] = Rotation.from_euler("xyz", euler_random).as_quat()
-            self._send_eef_command(reset_pose[:7], reset_pose[-1])
-        else:
-            requests.post(self.url + "/reset_robot")
+        requests.post(self.url + "/reset_robot")
 
     def reset(self, **kwargs):
         # Environment reset routine

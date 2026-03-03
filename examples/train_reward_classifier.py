@@ -21,7 +21,7 @@ from experiments.mappings import CONFIG_MAPPING
 FLAGS = flags.FLAGS
 flags.DEFINE_string("exp_name", None, "Name of experiment corresponding to folder.")
 flags.DEFINE_integer("num_epochs", 300, "Number of training epochs.")
-flags.DEFINE_integer("batch_size", 512, "Batch size.")
+flags.DEFINE_integer("batch_size", 2048, "Batch size.")
 flags.DEFINE_string("checkpoint_name", None, "Name of the model checkpoint file.")
 flags.DEFINE_string("data_path", None, "Path to the dataset directory or file.")
 
@@ -31,7 +31,7 @@ def main(_):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     assert FLAGS.exp_name in CONFIG_MAPPING, "Experiment folder not found."
     config = CONFIG_MAPPING[FLAGS.exp_name]()
-    env = config.get_environment(fake_env=True, save_video=False, classifier=False)
+    env = config.get_environment(fake_env=True, classifier=False)
     data_path = os.path.join(os.path.dirname(__file__), "experiments", FLAGS.exp_name, FLAGS.data_path)
 
     # Initialize replay buffer for positive (success) samples with binary label support
@@ -41,6 +41,7 @@ def main(_):
         with open(path, "rb") as f:
             success_data = pkl.load(f)
         for trans in success_data:
+            print(trans.keys())
             if "images" in trans["observations"].keys():
                 continue
             trans["labels"] = 1

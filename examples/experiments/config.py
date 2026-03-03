@@ -4,7 +4,7 @@ from typing import List
 
 class DefaultTrainingConfig:
     # Core algorithm and trajectory settings
-    agent: str = "drq"
+    agent: str = "sac"
     max_traj_length: int = 100
     batch_size: int = 32
     cta_ratio: int = 1
@@ -34,7 +34,7 @@ class DefaultTrainingConfig:
     proprio_keys: List[str] = None
 
     @abstractmethod
-    def get_environment(self, fake_env=False, save_video=False, classifier=False):
+    def get_environment(self, fake_env=False, classifier=False):
         # Must be implemented to return the specific gym environment instance
         raise NotImplementedError
 

@@ -1,109 +1,109 @@
 import os
-
-os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "hide"
-
-import pygame
 import multiprocessing
 import numpy as np
-from typing import Tuple
+import pygame
+from typing import Tuple, List, Dict, Any, Optional
+
+os.environ["PYGAME_HIDE_SUPPORT_PROMPT"] = "1"
 
 
 class GamepadExpert:
 
-    def __init__(self, guid):
-        # Initialize gamepad with unique hardware identifier
+    def __init__(self, guid: str):
         self.guid = guid
-
-        # Shared state manager for inter-process communication
         self.manager = multiprocessing.Manager()
-        self.latest_data = self.manager.dict()
-        self.latest_data["deltas"] = [0] * 6
-        self.latest_data["intervened"] = False
 
-        # Start background polling process (daemon mode to follow main process exit)
-        self.process = multiprocessing.Process(target=self._read_gamepad)
-        self.process.daemon = True
-        self.process.start()
+        # Initialize shared state for inter-process communication
+        self.shared_state: Dict[str, Any] = self.manager.dict()
+        self.shared_state["deltas"] = [0.0] * 6
+        self.shared_state["intervened"] = False
 
-    def _read_gamepad(self):
-        # Initialize pygame and joystick subsystem
+        # Start background polling process (daemon process)
+        self.poll_process = multiprocessing.Process(target=self._poll_gamepad)
+        self.poll_process.daemon = True
+        self.poll_process.start()
+
+    def _poll_gamepad(self) -> None:
+        # Initialize pygame and joystick module
         pygame.init()
         pygame.joystick.init()
-        joystick = None
+        target_joystick: Optional[pygame.joystick.Joystick] = None
 
-        # Locate and initialize target gamepad by GUID
-        for i in range(pygame.joystick.get_count()):
-            curr_joy = pygame.joystick.Joystick(i)
-            if curr_joy.get_guid() == self.guid:
-                joystick = curr_joy
-                joystick.init()
+        # Find target gamepad by GUID
+        for joy_idx in range(pygame.joystick.get_count()):
+            joystick = pygame.joystick.Joystick(joy_idx)
+            if joystick.get_guid() == self.guid:
+                target_joystick = joystick
+                target_joystick.init()
                 break
 
         # Exit if target gamepad not found
-        if joystick is None:
+        if target_joystick is None:
+            pygame.quit()
             return
 
-        # Define input sensitivity thresholds
-        deadzone, threshold = 0.2, 0.5
+        # Input parameters for deadzone and threshold filtering
+        deadzone = 0.2
+        threshold = 0.5
 
-        # Main polling loop
-        while True:
-            pygame.event.pump()
+        try:
+            while True:
+                pygame.event.pump()
 
-            # Read raw axis values from gamepad hardware
-            a0 = joystick.get_axis(0)  # Left Stick X (Shoulder)
-            a1 = joystick.get_axis(1)  # Left Stick Y (Arm Y)
-            a3 = joystick.get_axis(3)  # Right Stick Y (Wrist Roll)
-            a4 = joystick.get_axis(4)  # Right Stick X (Wrist Flex)
+                # Read raw axis values from gamepad
+                axis_left_x = target_joystick.get_axis(0)
+                axis_left_y = target_joystick.get_axis(1)
+                axis_right_y = target_joystick.get_axis(3)
+                axis_right_x = target_joystick.get_axis(4)
 
-            # Initialize joint movement deltas
-            d_sh, d_y, d_flex, d_roll = 0, 0, 0, 0
+                # Initialize action delta variables
+                d_shoulder = d_arm_y = d_wrist_flex = d_wrist_roll = 0
 
-            # Exclusive axis logic for shoulder/arm Y (prevent diagonal movement)
-            if abs(a0) > abs(a1):
-                if abs(a0) > deadzone:
-                    d_sh = 1 if a0 > 0 else -1
-            else:
-                if abs(a1) > deadzone:
-                    d_y = 1 if a1 > 0 else -1
+                # Handle shoulder/arm Y axis (mutually exclusive)
+                if abs(axis_left_x) > abs(axis_left_y):
+                    if abs(axis_left_x) > deadzone:
+                        d_shoulder = 1.0 if axis_left_x > 0 else -1.0
+                else:
+                    if abs(axis_left_y) > deadzone:
+                        d_arm_y = 1.0 if axis_left_y > 0 else -1.0
 
-            # Exclusive axis logic for wrist joints (prevent diagonal movement)
-            if abs(a3) > abs(a4):
-                if abs(a3) > deadzone:
-                    d_roll = 1 if a3 < 0 else -1
-            else:
-                if abs(a4) > deadzone:
-                    d_flex = 1 if a4 > 0 else -1
+                # Handle wrist flexion/roll (mutually exclusive)
+                if abs(axis_right_y) > abs(axis_right_x):
+                    if abs(axis_right_y) > deadzone:
+                        d_wrist_roll = 1.0 if axis_right_y < 0 else -1.0
+                else:
+                    if abs(axis_right_x) > deadzone:
+                        d_wrist_flex = 1.0 if axis_right_x > 0 else -1.0
 
-            # Z-axis (Elevation) control (Button 4 = up, Axis 2 = down)
-            d_z = 0
-            if joystick.get_button(4):
-                d_z = 1
-            elif joystick.get_axis(2) > threshold:
-                d_z = -1
+                # Handle Z-axis (lift/lower) control
+                d_z = 0.0
+                if target_joystick.get_button(4):
+                    d_z = 1.0
+                elif target_joystick.get_axis(2) > threshold:
+                    d_z = -1.0
 
-            # Gripper control (Axis 5 = open, Button 5 = close)
-            d_gr = 0
-            if joystick.get_axis(5) > threshold:
-                d_gr = 1
-            elif joystick.get_button(5):
-                d_gr = -1
+                # Handle gripper control
+                d_gripper = 0.0
+                if target_joystick.get_axis(5) > threshold:
+                    d_gripper = 1.0
+                elif target_joystick.get_button(5):
+                    d_gripper = -1.0
 
-            # Compile all movement deltas into command vector
-            deltas = [d_sh, d_y, d_z, d_flex, d_roll, d_gr]
+                # Update shared state with new action deltas
+                deltas: List[float] = [d_shoulder, d_arm_y, d_z, d_wrist_flex, d_wrist_roll, d_gripper]
+                self.shared_state["deltas"] = deltas
+                self.shared_state["intervened"] = any(abs(d) > 0 for d in deltas)
 
-            try:
-                # Update shared state with new command
-                self.latest_data["deltas"] = deltas
-                # Mark intervention status (active if any delta non-zero)
-                self.latest_data["intervened"] = any(d != 0 for d in deltas)
-            except (BrokenPipeError, OSError):
-                # Exit loop if main process closes communication pipe
-                break
+                # Reduce CPU usage
+                pygame.time.wait(10)
 
-            # Small sleep to reduce CPU usage
-            pygame.time.wait(10)
+        except (BrokenPipeError, OSError, KeyboardInterrupt):
+            # Cleanup on process exit
+            pygame.quit()
+            return
 
     def get_action(self) -> Tuple[np.ndarray, bool]:
-        # Return latest command vector and scaled intervention status
-        return np.array(self.latest_data["deltas"]), self.latest_data["intervened"] * 0.05
+        # Get latest gamepad action deltas and intervention status
+        deltas = np.array(self.shared_state["deltas"], dtype=np.float32)
+        intervened = self.shared_state["intervened"]
+        return deltas, intervened * 0.05

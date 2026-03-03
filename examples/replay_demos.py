@@ -81,7 +81,7 @@ def replay_demos(demo_file, exp_name, max_episodes=None):
     config = CONFIG_MAPPING[exp_name]()
 
     # Initialize environment with real execution (non-fake)
-    env = config.get_environment(fake_env=False, save_video=False, classifier=True)
+    env = config.get_environment(fake_env=False, classifier=True)
 
     # Split transitions into episodes using 'dones' flag
     episodes = []

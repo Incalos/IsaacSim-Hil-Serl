@@ -27,7 +27,7 @@ def main(_):
 
     # Initialize experiment configuration and environment
     config = CONFIG_MAPPING[FLAGS.exp_name]()
-    env = config.get_environment(fake_env=False, save_video=False, classifier=False)
+    env = config.get_environment(fake_env=False, classifier=False)
 
     # Set up output path for YAML file
     base_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'experiments', FLAGS.exp_name)

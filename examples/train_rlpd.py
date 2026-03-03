@@ -34,7 +34,6 @@ flags.DEFINE_string("ip", "localhost", "IP address of the learner.")
 flags.DEFINE_string("checkpoint_path", None, "Path for saving/loading checkpoints.")
 flags.DEFINE_integer("eval_checkpoint_step", 0, "Step of checkpoint to evaluate.")
 flags.DEFINE_integer("eval_n_trajs", 10, "Number of evaluation trajectories.")
-flags.DEFINE_boolean("save_video", False, "Save evaluation videos.")
 flags.DEFINE_boolean("debug", False, "Enable debug mode.")
 
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -262,7 +261,7 @@ def main(_):
         torch.cuda.manual_seed(FLAGS.seed)
 
     # Initialize environment with episode statistics tracking
-    env = RecordEpisodeStatistics(config.get_environment(fake_env=FLAGS.learner, save_video=FLAGS.save_video, classifier=True))
+    env = RecordEpisodeStatistics(config.get_environment(fake_env=FLAGS.learner, classifier=True))
 
     # Initialize SAC agent with pixel observations
     agent = make_sac_pixel_agent(

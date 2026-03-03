@@ -14,31 +14,29 @@ from experiments.config import DefaultTrainingConfig
 from serl_launcher.networks.reward_classifier import load_classifier_func
 
 
-# Environment configuration class (inherits from DefaultEnvConfig)
+# Environment configuration class
 class EnvConfig(DefaultEnvConfig):
     ROBOT_CONFIG = "examples/experiments/so101_pick_oranges/so101_params.yaml"
     IMAGE_CROP: dict[str, callable] = {
-        "front_camera": lambda img: img[100:350, 20:450, :],
+        "front_camera": lambda img: img[50:320, 180:480, :],
         "wrist_camera": lambda img: img,
-        "side_camera": lambda img: img[:250, :370, :],
+        "side_camera": lambda img: img[:250, :470, :],
     }
-    RANDOM_RESET = False
-    ACTION_SCALE = (0.04, 0.2, 1)
+    ACTION_SCALE = (0.015, 0.1, 1)
+    MAX_EPISODE_LENGTH = 10000000
 
 
-# Training configuration class (inherits from DefaultTrainingConfig)
+# Training configuration class
 class TrainConfig(DefaultTrainingConfig):
-    # Observation and proprioception configuration
     image_keys = ["wrist_camera", "front_camera", "side_camera"]
     classifier_keys = ["wrist_camera", "front_camera", "side_camera"]
     proprio_keys = ["q", "tcp_pose"]
 
-    # Training hyperparameters
     buffer_period = 1000
     checkpoint_period = 1000
     steps_per_update = 10000
     fake_env = False
-    image_size = (128, 128)
+    image_size = (144, 192)
     batch_size = 64
     cta_ratio = 4
     discount = 0.97
@@ -52,12 +50,11 @@ class TrainConfig(DefaultTrainingConfig):
     demo_path = os.path.join(os.path.dirname(__file__), "demo_data")
 
     # Create and configure environment instance
-    def get_environment(self, fake_env=False, save_video=False, classifier=True):
+    def get_environment(self, fake_env=False, classifier=True):
         # Initialize base SO101 environment with custom config
         env = SO101Env(fake_env=fake_env, config=EnvConfig())
         # Add gamepad intervention capability
         env = GamepadIntervention(env, guid="0300509d5e040000120b000009050000")
-
         # Apply SERL observation formatting and temporal chunking
         env = SERLObsWrapper(env, proprio_keys=self.proprio_keys)
         env = ChunkingWrapper(env, obs_horizon=1, act_exec_horizon=None)
@@ -82,20 +79,18 @@ class TrainConfig(DefaultTrainingConfig):
             # Reward function for stage 1 (grasping)
             def reward_func1(obs):
                 prob = sigmoid(classifier1(obs))
-                reward = prob * 2.0
-                is_grasped = prob > 0.75 and obs["state"][0][5] < 0.65
-                if is_grasped:
-                    reward += 6.0
-                return reward, is_grasped
+                closed = obs["state"][0][5] < 0.65
+                base = prob * (1.0 if closed else 0.5)
+                success = (prob > 0.7) and closed
+                return base + (1.0 if success else 0.0), success
 
             # Reward function for stage 2 (placing)
             def reward_func2(obs):
                 prob = sigmoid(classifier2(obs))
-                reward = prob * 2.0
-                is_placed = prob > 0.75 and obs["state"][0][5] > 1.0
-                if is_placed:
-                    reward += 3.0
-                return reward, is_placed
+                opened = obs["state"][0][5] > 0.8
+                base = prob * (1.0 if opened else 0.5)
+                success = (prob > 0.7) and opened
+                return base + (1.0 if success else 0.0), success
 
             # Wrap environment with multi-stage reward classifier
             env = MultiStageBinaryRewardClassifierWrapper(env, [reward_func1, reward_func2])

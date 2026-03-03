@@ -100,7 +100,7 @@ class SO101ROS2Node(Node):
                 q = transform_stamped.transform.rotation
                 self.eef_poses_quat = np.array([p.x, p.y, p.z, q.x, q.y, q.z, q.w])
                 self.eef_poses_euler[:3] = np.array([p.x, p.y, p.z])
-                self.eef_poses_euler[3:] = Rotation.from_quat(self.eef_poses_quat[3:]).as_euler("xyz", degrees=True)
+                self.eef_poses_euler[3:] = Rotation.from_quat(self.eef_poses_quat[3:]).as_euler("xyz")
 
     def _eef_wrench_callback(self, msg: Float32MultiArray) -> None:
         # Update EEF forces and torques buffers
@@ -153,7 +153,7 @@ class SO101ROS2Node(Node):
         # Process and publish EEF pose command (6D Euler -> 7D quaternion)
         pose_list = [float(x) for x in pose]
         if len(pose_list) == 6:
-            quat = Rotation.from_euler("xyz", pose_list[3:6], degrees=True).as_quat()
+            quat = Rotation.from_euler("xyz", pose_list[3:6]).as_quat()
             pose_list = pose_list[:3] + quat.tolist()
         elif len(pose_list) != 7:
             self.get_logger().error(f"Expected 6 or 7 pose components, got {len(pose)}.")

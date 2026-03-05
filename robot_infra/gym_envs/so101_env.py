@@ -50,7 +50,7 @@ class DefaultEnvConfig:
 class SO101Env(gym.Env):
 
     def __init__(self, fake_env=False, hz=10, config=DefaultEnvConfig(), image_size=(128, 128)):
-        # Initialize core parameters from config
+        # Initialize core configuration parameters
         self.hz = hz
         self.config = config
         self.url = config.SERVER_URL
@@ -59,10 +59,14 @@ class SO101Env(gym.Env):
         self.camera_names = config.CAMERA_NAMES
         self.xyz_bounding_box = self.rpy_bounding_box = None
 
-        # Define normalized action space (7 DOF: 6 for EEF, 1 for gripper)
-        self.action_space = self.action_space = gym.spaces.Box(low=np.full(7, -1.0, dtype=np.float32), high=np.full(7, 1.0, dtype=np.float32), dtype=np.float32)
+        # Define normalized action space (7 DOF: 6 for EEF pose, 1 for gripper)
+        self.action_space = gym.spaces.Box(
+            low=np.full(7, -1.0, dtype=np.float32),
+            high=np.full(7, 1.0, dtype=np.float32),
+            dtype=np.float32,
+        )
 
-        # Define multi-modal observation space (state + multi-camera images)
+        # Define multi-modal observation space (robot state + multi-camera RGB images)
         self.observation_space = gym.spaces.Dict({
             "state":
                 gym.spaces.Dict({
@@ -77,19 +81,19 @@ class SO101Env(gym.Env):
                 gym.spaces.Dict({key: gym.spaces.Box(0, 255, shape=(image_size[0], image_size[1], 3), dtype=np.uint8) for key in self.camera_names}),
         })
 
-        # Load configuration files
+        # Load robot configuration parameters from YAML file
         self._load_yaml_config(config.ROBOT_CONFIG)
 
-        # Skip real env initialization if fake_env flag is set
+        # Skip real environment initialization if fake_env flag is enabled
         if fake_env:
             return
 
-        # Sync initial robot state from remote server
+        # Synchronize initial robot state from remote server
         self._update_currpos()
         self.curr_path_length = 0
         self.terminate = False
 
-        # Setup keyboard listener for emergency shutdown (Esc key)
+        # Setup emergency shutdown via Esc key press
         def on_press(key):
             if key == keyboard.Key.esc:
                 self.terminate = True
@@ -99,7 +103,7 @@ class SO101Env(gym.Env):
         print("Initialized SO101")
 
     def _update_currpos(self):
-        # Sync all robot state variables with remote server via POST request
+        # Synchronize robot state with remote server via HTTP POST request
         ps = requests.post(self.url + "/get_state").json()
         self.curr_joint_positions = np.array(ps["joint_positions"])
         self.curr_joint_velocities = np.array(ps["joint_velocities"])
@@ -110,13 +114,13 @@ class SO101Env(gym.Env):
         self.curr_eef_velocities = np.array(ps["eef_velocities"])
 
     def _load_yaml_config(self, path):
-        # Load robot configuration from YAML file (joint limits, bounding box, reset pose)
+        # Load robot parameters from YAML configuration file
         with open(path, "r") as f:
             params = yaml.safe_load(f)
             self.joint_names = params["joint_names"]
             self.reset_pose = params.get("reset_joint_positions", [])
 
-            # Initialize Cartesian and rotation bounding boxes if defined
+            # Initialize Cartesian and rotation bounding boxes if configured
             if (params["bounding_box"]["min_translation"] is not None and params["bounding_box"]["max_translation"] is not None and params["bounding_box"]["min_rotation"] is not None and
                     params["bounding_box"]["max_rotation"] is not None):
                 self.xyz_bounding_box = gym.spaces.Box(
@@ -140,12 +144,12 @@ class SO101Env(gym.Env):
             self.urdf_path = params["urdf_path"]
 
     def clip_safety_box(self, pose: np.ndarray) -> np.ndarray:
-        # Enforce Cartesian position and rotation limits for hardware safety
+        # Enforce safety limits for Cartesian position and rotation
         if self.xyz_bounding_box is not None and self.rpy_bounding_box is not None:
-            # Clip translation (XYZ) to bounding box
+            # Clip translation (XYZ) to defined bounding box
             pose[:3] = np.clip(pose[:3], self.xyz_bounding_box.low, self.xyz_bounding_box.high)
 
-            # Convert quaternion to Euler angles, clip, then convert back
+            # Convert quaternion to Euler angles, apply rotation limits, convert back to quaternion
             euler = Rotation.from_quat(pose[3:]).as_euler("xyz")
             sign = np.sign(euler[2])
             euler[2] = sign * (np.clip(np.abs(euler[2]), self.rpy_bounding_box.low[2], self.rpy_bounding_box.high[2]))
@@ -156,7 +160,7 @@ class SO101Env(gym.Env):
             return pose
 
     def get_im(self, quality: int | None = None) -> Dict[str, np.ndarray]:
-        # Fetch camera images from remote server (binary protocol for efficiency)
+        # Fetch camera images from remote server using binary protocol
         try:
             url = f"{self.url}/get_images"
             resp = requests.post(url, timeout=2, params={"quality": quality} if quality is not None else None)
@@ -186,7 +190,7 @@ class SO101Env(gym.Env):
             return self.get_im(quality)
 
     def _send_eef_command(self, pos: np.ndarray, gripper_state: float):
-        # Send EEF Cartesian pose command to remote server
+        # Send end-effector Cartesian pose command to remote server
         data = {"eef_pose": np.array(pos).astype(np.float32).tolist(), "gripper_state": gripper_state}
         requests.post(self.url + "/move_eef", json=data)
 
@@ -214,55 +218,57 @@ class SO101Env(gym.Env):
         # Execute one step of the environment
         start_time = time.time()
 
-        # Clip action to valid range
+        # Ensure action is within valid range
         action = np.clip(action, self.action_space.low, self.action_space.high)
 
-        # Calculate next EEF pose based on action and scale
-        self.nextpos = self.curr_eef_poses_quat.copy()
-        self.nextpos[:3] = self.nextpos[:3] + action[:3] * self.action_scale[0]
-        self.nextpos[3:] = (Rotation.from_rotvec(action[3:6] * self.action_scale[1]) * Rotation.from_quat(self.curr_eef_poses_quat[3:])).as_quat()
+        # Calculate next end-effector pose based on action and scaling factors
+        next_eef_pos = self.curr_eef_poses_quat.copy()
+        next_eef_pos[:3] = next_eef_pos[:3] + action[:3] * self.action_scale[0]
+        next_eef_pos[3:] = (Rotation.from_rotvec(action[3:6] * self.action_scale[1]) * Rotation.from_quat(self.curr_eef_poses_quat[3:])).as_quat()
 
-        # Calculate gripper action (scale to physical limits)
-        gripper_action = ((self.gripper_limits[1] - self.gripper_limits[0]) * (action[6] * self.action_scale[2] + 1) / 2.0) + self.gripper_limits[0]
+        # Calculate and clip gripper action to physical limits
+        gripper_action = float(self.curr_joint_positions[-1] + action[6] * self.action_scale[2])
+        gripper_action = np.clip(gripper_action, self.gripper_limits[0], self.gripper_limits[1])
+        next_eef_poses = self.clip_safety_box(next_eef_pos)
 
-        # Send command to robot (with safety clipping)
-        self._send_eef_command(self.clip_safety_box(self.nextpos), float(gripper_action))
+        # Send control command to robot
+        self._send_eef_command(next_eef_poses, gripper_action)
 
-        # Update episode step counter
+        # Increment episode step counter
         self.curr_path_length += 1
 
-        # Enforce control frequency
+        # Maintain control frequency by sleeping if necessary
         dt = time.time() - start_time
         time.sleep(max(0, (1.0 / self.hz) - dt))
 
-        # Sync latest robot state and get observation
+        # Update robot state and get current observation
         self._update_currpos()
         ob = self._get_obs()
 
-        # Calculate reward and termination condition
+        # Calculate reward and check termination conditions
         reward = self.compute_reward(ob)
         done = self.curr_path_length >= self.max_episode_length or reward or self.terminate
 
         return ob, int(reward), done, False, {"succeed": reward}
 
     def compute_reward(self, ob) -> bool:
-        # Base reward function (to be overridden by task-specific wrappers)
+        # Base reward function (to be overridden by task-specific implementations)
         return False
 
     def go_to_reset(self):
-        # Reset robot to initial pose
+        # Reset robot to initial pose via server request
         self._update_currpos()
         requests.post(self.url + "/reset_robot")
 
     def reset(self, **kwargs):
-        # Environment reset routine
+        # Reset environment to initial state
         self.go_to_reset()
-        time.sleep(2)  # Allow robot to settle
+        time.sleep(7)
         self.curr_path_length, self.terminate = 0, False
         self._update_currpos()
         return self._get_obs(), {"succeed": False}
 
     def close(self):
-        # Cleanup resources (keyboard listener)
+        # Cleanup resources (stop keyboard listener)
         if hasattr(self, "listener"):
             self.listener.stop()

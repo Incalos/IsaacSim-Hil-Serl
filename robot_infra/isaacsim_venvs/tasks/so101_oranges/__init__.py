@@ -62,15 +62,15 @@ SO101_FOLLOWER_CFG = ArticulationCfg(
         "gripper":
             ImplicitActuatorCfg(
                 joint_names_expr=["gripper"],
-                effort_limit_sim=40,
-                velocity_limit_sim=1.2,
-                stiffness=200,
-                damping=50,
-                friction=3.0,
+                effort_limit_sim=60,
+                velocity_limit_sim=0.8,
+                stiffness=400,
+                damping=40,
+                friction=8.0,
                 armature=0.3,
             ),
     },
-    soft_joint_pos_limit_factor=1.0,
+    soft_joint_pos_limit_factor=0.95,
 )
 
 # Register pick-oranges environment with Gymnasium

@@ -22,7 +22,7 @@ class EnvConfig(DefaultEnvConfig):
         "wrist_camera": lambda img: img,
         "side_camera": lambda img: img[:250, :470, :],
     }
-    ACTION_SCALE = (0.015, 0.1, 1)
+    ACTION_SCALE = (0.015, 0.1, 0.1)
     MAX_EPISODE_LENGTH = 100
 
 

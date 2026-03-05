@@ -85,7 +85,6 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
                 actions = agent.sample_actions(obs, argmax=True)
                 if isinstance(actions, torch.Tensor):
                     actions = actions.cpu().numpy()
-                print(actions)
                 obs, reward, done, truncated, _ = env.step(actions)
                 if done or truncated:
                     success_counter += reward
@@ -322,7 +321,7 @@ def main(_):
 
     # Run actor node
     elif FLAGS.actor:
-        actor(agent, QueuedDataStore(50000), QueuedDataStore(50000), env)
+        actor(agent, QueuedDataStore(100000), QueuedDataStore(100000), env)
 
 
 if __name__ == "__main__":

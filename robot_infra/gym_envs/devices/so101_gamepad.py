@@ -106,4 +106,4 @@ class GamepadExpert:
         # Get latest gamepad action deltas and intervention status
         deltas = np.array(self.shared_state["deltas"], dtype=np.float32)
         intervened = self.shared_state["intervened"]
-        return deltas, intervened * 0.05
+        return deltas, intervened

@@ -22,8 +22,8 @@ class EnvConfig(DefaultEnvConfig):
         "wrist_camera": lambda img: img,
         "side_camera": lambda img: img[:250, :470, :],
     }
-    ACTION_SCALE = (0.015, 0.1, 1)
-    MAX_EPISODE_LENGTH = 10000000
+    ACTION_SCALE = (0.015, 0.1, 0.1)
+    MAX_EPISODE_LENGTH = 300
 
 
 # Training configuration class
@@ -87,7 +87,7 @@ class TrainConfig(DefaultTrainingConfig):
             # Reward function for stage 2 (placing)
             def reward_func2(obs):
                 prob = sigmoid(classifier2(obs))
-                opened = obs["state"][0][5] > 0.8
+                opened = obs["state"][0][5] > 0.75
                 base = prob * (1.0 if opened else 0.5)
                 success = (prob > 0.7) and opened
                 return base + (1.0 if success else 0.0), success

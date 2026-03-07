@@ -236,8 +236,8 @@ class ReachOrangeEnvCfg(ManagerBasedRLEnvCfg):
             self,
             random_options=[
                 randomize_object_uniform("Orange001", pose_range={
-                    "x": (-0.07, 0.12),
-                    "y": (-0.05, 0.05),
+                    "x": (-0.05, 0.1),
+                    "y": (-0.04, 0.04),
                     "z": (0, 0)
                 }),
                 randomize_object_uniform("Orange002", pose_range={

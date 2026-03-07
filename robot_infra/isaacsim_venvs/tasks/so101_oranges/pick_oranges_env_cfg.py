@@ -244,8 +244,10 @@ class PickOrangesEnvCfg(ManagerBasedRLEnvCfg):
             self,
             random_options=[
                 randomize_object_uniform("Orange001", pose_range={
-                    "x": (-0.07, -0.07),
-                    "y": (-0.02, -0.02),
+                    # "x": (-0.06, -0.06),
+                    # "y": (-0.02, -0.02),
+                    "x": (-0.05, 0.1),
+                    "y": (-0.03, 0.03),
                     "z": (0, 0)
                 }),
                 randomize_object_uniform("Orange002", pose_range={

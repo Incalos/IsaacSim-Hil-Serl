@@ -81,7 +81,7 @@ class TrainConfig(DefaultTrainingConfig):
                 prob = sigmoid(classifier1(obs))
                 closed = obs["state"][0][5] < 0.65
                 base = prob * (1.0 if closed else 0.5)
-                success = (prob > 0.7) and closed
+                success = (prob > 0.65) and closed
                 return base + (1.0 if success else 0.0), success
 
             # Reward function for stage 2 (placing)

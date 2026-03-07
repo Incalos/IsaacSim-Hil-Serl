@@ -263,7 +263,7 @@ class SO101Env(gym.Env):
     def reset(self, **kwargs):
         # Reset environment to initial state
         self.go_to_reset()
-        time.sleep(7)
+        time.sleep(3.5)
         self.curr_path_length, self.terminate = 0, False
         self._update_currpos()
         return self._get_obs(), {"succeed": False}

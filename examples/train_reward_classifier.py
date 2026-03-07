@@ -41,7 +41,6 @@ def main(_):
         with open(path, "rb") as f:
             success_data = pkl.load(f)
         for trans in success_data:
-            print(trans.keys())
             if "images" in trans["observations"].keys():
                 continue
             trans["labels"] = 1

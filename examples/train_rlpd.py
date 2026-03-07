@@ -80,6 +80,7 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
         success_counter = 0
         for i in range(FLAGS.eval_n_trajs):
             obs, _ = env.reset()
+            print("✅ Environment reset completed.")
             done = False
             while not done:
                 actions = agent.sample_actions(obs, argmax=True)
@@ -107,6 +108,7 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
 
     # Reset environment and initialize tracking variables
     obs, _ = env.reset()
+    print("✅ Environment reset completed.")
     timer, transitions, demo_transitions = Timer(), [], []
     running_return, intervention_count, intervention_steps = 0.0, 0, 0
     already_intervened = False
@@ -122,7 +124,7 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
         else:
             with torch.no_grad():
                 obs_t = {k: torch.as_tensor(v, device=DEVICE).unsqueeze(0) for k, v in obs.items()}
-                actions = agent.sample_actions(obs_t, argmax=False).squeeze(0).cpu().numpy()
+                actions = agent.sample_actions(obs_t, argmax=True).squeeze(0).cpu().numpy()
 
         # Step environment with sampled action
         next_obs, reward, done, truncated, info = env.step(actions)
@@ -164,6 +166,7 @@ def actor(agent: SACAgent, data_store, intvn_data_store, env):
             running_return, intervention_count, intervention_steps, already_intervened = 0.0, 0, 0, False
             client.update()
             obs, _ = env.reset()
+            print("✅ Environment reset completed.")
 
         # Periodically save buffer data to disk
         if step > 0 and config.buffer_period > 0 and step % config.buffer_period == 0:

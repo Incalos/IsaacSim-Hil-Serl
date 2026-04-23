@@ -1,0 +1,161 @@
+# 实验参数配置文件 (exp_params.yaml)
+# 该配置文件定义了机器人控制系统的所有必要参数，包括机器人硬件规格、环境边界、训练策略等
+
+# 命名空间配置
+namespace: your_namespace                     # 机器人系统命名空间，用于区分不同机器人实例
+
+# Flask服务器配置
+flask_url: your_flask_url                     # Flask服务器IP地址（本地回环地址）
+flask_port: your_flask_port                   # Flask服务器端口号
+flask_server: your_flask_server               # 完整的Flask服务器URL
+
+# 任务和机器人基本信息
+task_name: your_task_name                     # 当前执行的任务名称
+robot_type: your_robot_type                   # 机器人型号标识
+
+# 关节名称配置
+joint_names:
+- joint_name_1
+- joint_name_2
+- joint_name_3
+- joint_name_4
+- joint_name_5
+- joint_name_6
+
+# 重置位置配置 - 机器人复位时各关节的目标位置（弧度制）
+reset_joint_positions:
+- joint_position_1
+- joint_position_2
+- joint_position_3
+- joint_position_4
+- joint_position_5
+- joint_position_6
+
+# 关节限制范围配置 - 每个关节的最小和最大运动范围（弧度制）
+joint_limits:
+  joint_name_1:
+  - joint_limit_1_min
+  - joint_limit_1_max
+  joint_name_2:
+  - joint_limit_2_min
+  - joint_limit_2_max
+  joint_name_3:
+  - joint_limit_3_min
+  - joint_limit_3_max
+  joint_name_4:
+  - joint_limit_4_min
+  - joint_limit_4_max
+  joint_name_5:
+  - joint_limit_5_min
+  - joint_limit_5_max
+  joint_name_6:
+  - joint_limit_6_min
+  - joint_limit_6_max
+
+# 工作空间边界框配置 - 定义机器人操作的安全区域
+bounding_box:
+  # 平移边界 - 机器人末端执行器允许的空间移动范围
+  min_translation:                 # 最小平移边界（x, y, z坐标）,单位:米
+  - min_translation_x_min
+  - min_translation_y_min
+  - min_translation_z_min
+  max_translation:                 # 最大平移边界（x, y, z坐标）,单位:米
+  - max_translation_x_max
+  - max_translation_y_max
+  - max_translation_z_max
+
+  # 旋转边界 - 机器人末端执行器允许的姿态旋转范围
+  min_rotation:                    # 最小旋转边界（roll, pitch, yaw），单位:弧度
+  - min_rotation_roll_min
+  - min_rotation_pitch_min
+  - min_rotation_yaw_min
+  max_rotation:                    # 最大旋转边界（roll, pitch, yaw）
+  - max_rotation_roll_max
+  - max_rotation_pitch_max
+  - max_rotation_yaw_max
+
+# 图像尺寸配置 - 视觉系统图像分辨率设置
+image_size:
+- image_height                     # 图像高度（像素）
+- image_width                      # 图像宽度（像素）
+
+# 动作尺度配置 - 控制机器人动作的灵敏度
+action_scale:
+- 0.02                          # 第一维度动作缩放因子
+- 0.1                           # 第二维度动作缩放因子
+- 0.5                           # 第三维度动作缩放因子
+
+# 机器人控制参数
+max_episode_length: 200            # 单次任务最大步数
+random_reset: false                # 是否启用随机重置
+random_joint_range: [0.4, 0.2]     # 随机关节范围设置 [低范围, 高范围]
+policy_hz: 10                      # 策略执行频率（Hz）
+
+# 强化学习算法配置
+agent: "sac"                       # 使用SAC强化学习算法
+batch_size: 64                     # 训练批次大小
+cta_ratio: 4                       # CTA比率参数
+discount: 0.97                     # 折扣因子（未来奖励权重）
+max_steps: 100000                  # 最大训练步数
+replay_buffer_capacity: 90000      # 经验回放缓冲区容量
+random_steps: 500                  # 初始随机探索步数
+training_starts: 100               # 开始训练的起始步数
+steps_per_update: 50               # 每次更新间隔步数
+log_period: 100                    # 日志记录周期
+eval_period: 100                   # 评估周期
+
+# 模型编码器配置
+encoder_type: your_encoder_type  # 使用预训练的视觉编码器（resnet18-pretrained, resnet34-pretrained, resnet50-pretrained, resnet18, resnet34, resnet50）
+
+# 游戏手柄唯一标识符
+gamepad_guid: your_gamepad_guid
+
+# 评估参数
+eval_checkpoint_step: 0            # 评估检查点步数
+eval_n_trajs: 5                    # 评估轨迹数量
+
+# 检查点和缓冲区保存周期
+checkpoint_period: 1000            # 模型检查点保存周期
+buffer_period: 1000                # 缓冲区保存周期
+
+# 传感器数据键配置
+proprio_keys:                      # 本体感知数据键（关节位置、TCP姿态等）
+- proprio_key_1
+- proprio_key_2
+- proprio_key_3
+- proprio_key_4
+
+# 相机配置
+camera_names:                      # 相机名称列表
+- camera_name_1
+- camera_name_2
+- camera_name_3
+
+# 图像处理键配置
+image_keys:                        # 图像数据键
+- camera_name_1
+- camera_name_2
+- camera_name_3
+
+classifier_keys:                   # 分类器使用的图像键
+- camera_name_1
+- camera_name_2
+- camera_name_3
+
+# 图像裁剪区域配置 - 为每个相机定义感兴趣区域
+image_crop_regions:
+  camera_name_1:                    
+    h_start: camera_name_1_h_start  
+    h_end: camera_name_1_h_end      
+    w_start: camera_name_1_w_start  
+    w_end: camera_name_1_w_end 
+  camera_name_2:   
+    h_start: camera_name_2_h_start
+    h_end: camera_name_2_h_end
+    w_start: camera_name_2_w_start
+    w_end: camera_name_2_w_end
+  camera_name_3:
+    h_start: camera_name_3_h_start
+    h_end: camera_name_3_h_end
+    w_start: camera_name_3_w_start
+    w_end: camera_name_3_w_end

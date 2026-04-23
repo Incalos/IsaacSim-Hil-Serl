@@ -1,0 +1,260 @@
+{
+  "configById": {
+    "RawMessages!2n7oyih": {
+      "topicPath": "/so101/joint_states",
+      "expansion": {
+        "header": "c",
+        "stamp~header": "c",
+        "name": "c",
+        "position": "e",
+        "velocity": "e",
+        "effort": "e"
+      }
+    },
+    "RawMessages!339ayqj": {
+      "topicPath": "/so101/joint_forces",
+      "expansion": {
+        "header": "c",
+        "stamp~header": "c",
+        "name": "c",
+        "position": "e",
+        "velocity": "e",
+        "effort": "e"
+      }
+    },
+    "RawMessages!8e8bgt": {
+      "topicPath": "/so101/joint_torques",
+      "expansion": {
+        "header": "c",
+        "stamp~header": "c",
+        "name": "c",
+        "position": "e",
+        "velocity": "e",
+        "effort": "e"
+      }
+    },
+    "RawMessages!29fya6k": {
+      "topicPath": "/so101/eef_poses",
+      "expansion": {
+        "transforms": "e",
+        "0~transforms": "e",
+        "header~0~transforms": "c",
+        "stamp~header~0~transforms": "c",
+        "transform~0~transforms": "e",
+        "translation~transform~0~transforms": "e",
+        "rotation~transform~0~transforms": "e"
+      }
+    },
+    "RawMessages!28uyjmw": {
+      "topicPath": "/so101/eef_velocities",
+      "expansion": {
+        "header": "e",
+        "stamp~header": "c",
+        "name": "c",
+        "position": "e",
+        "velocity": "e",
+        "effort": "e"
+      }
+    },
+    "RawMessages!14zdn1z": {
+      "topicPath": "/so101/eef_wrenches",
+      "expansion": {
+        "header": "e",
+        "stamp~header": "c",
+        "name": "c",
+        "position": "e",
+        "velocity": "e",
+        "effort": "e"
+      }
+    },
+    "RawMessages!1d9d20v": {
+      "topicPath": "/so101/eef_jacobians",
+      "expansion": {
+        "header": "e",
+        "stamp~header": "c",
+        "name": "c",
+        "position": "e",
+        "velocity": "e",
+        "effort": "e"
+      }
+    },
+    "Image!rpy0ls": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "imageMode": {
+        "imageTopic": "/so101/front_camera/rgb"
+      }
+    },
+    "Image!2u8n23w": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "imageMode": {
+        "imageTopic": "/so101/wrist_camera/rgb"
+      }
+    },
+    "Image!3acabt8": {
+      "cameraState": {
+        "distance": 20,
+        "perspective": true,
+        "phi": 60,
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "thetaOffset": 45,
+        "fovy": 45,
+        "near": 0.5,
+        "far": 5000
+      },
+      "imageMode": {
+        "imageTopic": "/so101/side_camera/rgb"
+      }
+    },
+    "Publish!hl3edx": {
+      "topicName": "/so101/eef_commands",
+      "datatype": "std_msgs/msg/Float32MultiArray",
+      "value": "{\n  \"layout\": {\n    \"dim\": [\n      {\n        \"label\": \"\",\n        \"size\": 0,\n        \"stride\": 0\n      }\n    ],\n    \"data_offset\": 0\n  },\n  \"data\": [\n    0.3092018961906433,\n    -0.08501885086297989,\n    0.11342985183000565,\n    -0.2995084524154663,\n    -0.41475868225097656,\n    0.27141687273979187,\n    0.8152320981025696,\n    0.5\n  ]\n}"
+    },
+    "Publish!3gbbh8g": {
+      "topicName": "/so101/joint_commands",
+      "datatype": "sensor_msgs/msg/JointState",
+      "value": "{\n  \"header\": {\n    \"stamp\": {\n      \"sec\": 0,\n      \"nanosec\": 0\n    },\n    \"frame_id\": \"\"\n  },\n  \"name\": [\n    \"shoulder_pan\",\n    \"shoulder_lift\",\n    \"elbow_flex\",\n    \"wrist_flex\",\n    \"wrist_roll\",\n    \"gripper\"\n  ],\n  \"position\": [0.1,0.5,-0.2,0.3,1,0],\n  \"velocity\": [],\n  \"effort\": []\n}"
+    },
+    "Publish!19bn0ue": {
+      "topicName": "/so101/isaacsim_reset",
+      "datatype": "std_msgs/msg/Int8",
+      "value": "{\n  \"data\": 1\n}"
+    },
+    "Tab!42yutp5": {
+      "activeTabIdx": 0,
+      "tabs": [
+        {
+          "title": "",
+          "layout": {
+            "first": {
+              "first": {
+                "first": {
+                  "first": "RawMessages!2n7oyih",
+                  "second": "RawMessages!339ayqj",
+                  "direction": "column",
+                  "splitPercentage": 44.66666666666667
+                },
+                "second": {
+                  "first": "RawMessages!8e8bgt",
+                  "second": "RawMessages!29fya6k",
+                  "direction": "column",
+                  "splitPercentage": 40.920096852300276
+                },
+                "direction": "column",
+                "splitPercentage": 48.38709677419356
+              },
+              "second": {
+                "first": "RawMessages!28uyjmw",
+                "second": {
+                  "first": "RawMessages!14zdn1z",
+                  "second": "RawMessages!1d9d20v",
+                  "direction": "column",
+                  "splitPercentage": 44.267681134359336
+                },
+                "direction": "column",
+                "splitPercentage": 30.546290971822902
+              },
+              "direction": "column",
+              "splitPercentage": 60.9660249713973
+            },
+            "second": {
+              "first": {
+                "first": "Image!rpy0ls",
+                "second": {
+                  "first": "Image!2u8n23w",
+                  "second": "Image!3acabt8",
+                  "direction": "row",
+                  "splitPercentage": 49.896290351949574
+                },
+                "direction": "row",
+                "splitPercentage": 33.19097010372178
+              },
+              "second": {
+                "first": "Publish!hl3edx",
+                "second": {
+                  "first": "Publish!3gbbh8g",
+                  "second": "Publish!19bn0ue",
+                  "direction": "column"
+                },
+                "direction": "row"
+              },
+              "direction": "column",
+              "splitPercentage": 56.98651942496144
+            },
+            "direction": "row",
+            "splitPercentage": 34.22953451043338
+          }
+        }
+      ]
+    }
+  },
+  "layout": "Tab!42yutp5",
+  "globalVariables": {},
+  "playbackConfig": {
+    "speed": 1
+  },
+  "userNodes": {}
+}

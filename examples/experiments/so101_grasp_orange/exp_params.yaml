@@ -1,0 +1,117 @@
+namespace: so101
+flask_url: 127.0.0.1
+flask_port: 5000
+flask_server: http://127.0.0.1:5000
+task_name: SO101_GRASP_ORANGE
+robot_type: so101
+joint_names:
+- shoulder_pan
+- shoulder_lift
+- elbow_flex
+- wrist_flex
+- wrist_roll
+- gripper
+reset_joint_positions:
+- 0.0
+- 0.0
+- 0.2
+- 1.0
+- -1.5708
+- 1.0
+joint_limits:
+  shoulder_pan:
+  - -1.9198599
+  - 1.9198599
+  shoulder_lift:
+  - -1.7453299
+  - 1.7453299
+  elbow_flex:
+  - -1.7453299
+  - 1.5707999
+  wrist_flex:
+  - -1.6580599
+  - 1.6580599
+  wrist_roll:
+  - -2.79253
+  - 2.79253
+  gripper:
+  - -0.174533
+  - 1.7453299
+bounding_box:
+  min_translation:
+  - 0.17719261348247528
+  - -0.1320207715034485
+  - 0.050035510212183
+  max_translation:
+  - 0.3336442708969116
+  - 0.22934956848621368
+  - 0.1607642024755478
+  min_rotation:
+  - 0.2579993224453348
+  - -0.6437615585058452
+  - -2.002832215390622
+  max_rotation:
+  - 1.1343048179209074
+  - 0.6701951977709224
+  - -0.6270627132999188
+image_size:
+- 144
+- 192
+action_scale:
+- 0.02
+- 0.1
+- 0.5
+max_episode_length: 200
+random_reset: false
+random_joint_range:
+- 0.4
+- 0.2
+policy_hz: 10
+agent: sac
+batch_size: 64
+cta_ratio: 4
+discount: 0.97
+max_steps: 100000
+replay_buffer_capacity: 90000
+random_steps: 500
+training_starts: 100
+steps_per_update: 50
+log_period: 100
+eval_period: 100
+encoder_type: resnet34-pretrained
+gamepad_guid: 0300509d5e040000120b000009050000
+eval_checkpoint_step: 0
+eval_n_trajs: 5
+checkpoint_period: 1000
+buffer_period: 1000
+proprio_keys:
+- q
+- tcp_pose
+camera_names:
+- wrist_camera
+- front_camera
+- side_camera
+image_keys:
+- wrist_camera
+- front_camera
+- side_camera
+classifier_keys:
+- wrist_camera
+- front_camera
+- side_camera
+image_crop_regions:
+  wrist_camera:
+    h_start: 0
+    h_end: 480
+    w_start: 0
+    w_end: 640
+  front_camera:
+    h_start: 70
+    h_end: 310
+    w_start: 50
+    w_end: 500
+  side_camera:
+    h_start: 0
+    h_end: 250
+    w_start: 0
+    w_end: 500

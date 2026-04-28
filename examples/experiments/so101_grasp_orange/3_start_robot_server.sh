@@ -1,8 +1,8 @@
-# Set the RMW implementation to Fast DDS
-export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
-
 #!/usr/bin/env bash
 set -euo pipefail
+
+# Set the RMW implementation to Fast DDS
+export RMW_IMPLEMENTATION=rmw_fastrtps_cpp
 
 # Get absolute path of the current script
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
